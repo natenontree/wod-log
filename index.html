@@ -765,18 +765,17 @@ function implSeg() {
   return `<div class="seg" style="margin-top:6px"><button data-dbimpl="1" class="${wsh.impl !== 2 ? 'on' : ''}">Single DB</button><button data-dbimpl="2" class="${wsh.impl === 2 ? 'on' : ''}">Dual DBs</button></div>`;
 }
 function dbSVG(w, n) {
-  // upright CrossFit-style hex dumbbell(s): hexagon heads top and bottom, chrome handle between
-  const W = 320, H = 82, cy = 41, on = w > 0;
-  const hexPts = (cx, y, r) => [0, 60, 120, 180, 240, 300].map(a => { const t = a * Math.PI / 180; return `${(cx + r * Math.cos(t)).toFixed(1)},${(y + r * Math.sin(t)).toFixed(1)}`; }).join(' ');
+  // upright hex dumbbell seen side-on: each head is a chamfered oblong (octagon), plain chrome handle
+  const W = 320, H = 82, cy = 41, on = w > 0, ww = w || 5;
+  const oct = (cx, y, a, b, c) => [[cx - a + c, y - b], [cx + a - c, y - b], [cx + a, y - b + c], [cx + a, y + b - c], [cx + a - c, y + b], [cx - a + c, y + b], [cx - a, y + b - c], [cx - a, y - b + c]].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
   const one = cx => {
-    const r = 8 + (w || 5) * 0.32, hh = r * Math.sqrt(3) / 2, handle = 24;  // handle length fixed, heads grow with weight
-    const yTop = cy - handle / 2 - hh, yBot = cy + handle / 2 + hh;
-    const grips = [-0.25, 0, 0.25].map(f => `<line x1="${cx - 3.5}" x2="${cx + 3.5}" y1="${cy + f * handle}" y2="${cy + f * handle}" stroke="#7b8088" stroke-width="1"/>`).join('');
-    const head = y => `<polygon points="${hexPts(cx, y, r)}" fill="#26282d" stroke="${on ? '#ff5b1f' : '#3a3d44'}" stroke-width="2"/><polygon points="${hexPts(cx, y, r * 0.55)}" fill="none" stroke="#3a3d44" stroke-width="1"/>`;
-    return `<rect x="${cx - 4}" y="${yTop}" width="8" height="${yBot - yTop}" rx="3" fill="#a9aeb6"/>${grips}${head(yTop)}${head(yBot)}
-      ${on ? `<text x="${cx}" y="${yTop + 3.5}" fill="#ff5b1f" font-size="${Math.max(8, r * 0.55).toFixed(1)}" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">${num(w)}</text>` : ''}`;
+    const hw = 26 + ww * 0.9, hh = 14 + ww * 0.36, handle = 24, c = Math.min(hw, hh) * 0.3;
+    const yTop = cy - handle / 2 - hh / 2, yBot = cy + handle / 2 + hh / 2;
+    const head = y => `<polygon points="${oct(cx, y, hw / 2, hh / 2, c)}" fill="#26282d" stroke="${on ? '#ff5b1f' : '#3a3d44'}" stroke-width="2" stroke-linejoin="round"/>`;
+    return `<rect x="${cx - 4}" y="${yTop}" width="8" height="${yBot - yTop}" rx="2" fill="#a9aeb6"/>${head(yTop)}${head(yBot)}
+      ${on ? `<text x="${cx}" y="${yTop + hh * 0.2}" fill="#ff5b1f" font-size="${(hh * 0.55).toFixed(1)}" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">${num(w)}</text>` : ''}`;
   };
-  return `<svg viewBox="0 0 ${W} ${H}" class="barsvg">${n === 2 ? one(128) + one(192) : one(160)}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="barsvg">${n === 2 ? one(118) + one(202) : one(160)}</svg>`;
 }
 function renderWS() {
   const eqx = draft.parts[wsh.pi].ex[0].equip;
