@@ -414,6 +414,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
+const APP_VERSION = 'v12';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -591,7 +592,7 @@ const Store = {
     } else {
       this.mode = 'local';
       try { const raw = localStorage.getItem('wodlog.v1'); if (raw) { const o = JSON.parse(raw); sessions = (o.workouts || []).map(toV2); settings = { ...settings, ...(o.settings || {}) }; if (!Array.isArray(settings.custom)) settings.custom = []; } } catch (e) {}
-      $('#storeNote').textContent = 'Your log is saved on this phone. Export a backup now and then — and to move it to another device.';
+      $('#storeNote').textContent = 'Your log is saved on this phone. Export a backup now and then — and to move it to another device. · App version ' + APP_VERSION;
       try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
       renderAll();
     }
