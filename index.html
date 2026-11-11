@@ -255,6 +255,12 @@ nav{z-index:8}
 .a-rightIn{animation:rightIn .32s cubic-bezier(.2,.85,.25,1)}
 .a-downOut{animation:downOut .28s cubic-bezier(.5,0,.75,.2) forwards}
 .a-rightOut{animation:rightOut .28s cubic-bezier(.5,0,.75,.2) forwards}
+.addstack{display:flex;flex-direction:column;gap:8px;margin:4px 0 16px}
+.addbar{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;border-radius:12px;border:1.5px dashed #2f3238;background:transparent;text-align:left;color:var(--muted)}
+.addbar .plus{width:26px;height:26px;border-radius:50%;background:rgba(255,91,31,.14);color:var(--accent);display:grid;place-items:center;font-size:20px;font-weight:600;line-height:1;flex:0 0 26px}
+.addbar b{font-size:15px;font-weight:600;color:#cfd1d4}
+.addbar small{margin-left:auto;font-size:12px;color:#61656c}
+.addbar:active{background:var(--card)}
 </style>
 </head>
 <body>
@@ -269,7 +275,7 @@ nav{z-index:8}
 
 <div id="sessLayer" class="sesslayer hidden"><div class="sesswrap" id="sessBody"></div></div>
 <nav><div>
-  <button data-v="log" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Log</button>
+  <button data-v="log" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8l-3.8.9.9-3.8z"/></svg>Log</button>
   <button data-v="exercises"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8"/></svg>Exercises</button>
   <button data-v="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 16l4-5 4 3 6-8"/></svg>Progress</button>
 </div></nav>
@@ -637,7 +643,7 @@ const GEAR_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" st
 const COMPOSE_SVG = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8l-3.8.9.9-3.8z"/></svg>`;
 function renderList() {
   $('#logForm').innerHTML = `<div class="listtop">${sessions.length ? `<input id="lSearch" placeholder="Search sessions" value="${esc(listQ)}">` : '<div style="flex:1"></div>'}<button class="gear" id="gearBtn" aria-label="Settings">${GEAR_SVG}</button></div><div id="listBody"></div>
-    <button class="fab" id="newSess" aria-label="New session">${COMPOSE_SVG}</button>`;
+    <button class="fab" id="newSess" aria-label="New session">+</button>`;
   renderListBody();
 }
 // ---- one session (note-style) ----
@@ -650,9 +656,9 @@ function renderSession() {
       <label class="dateline"><span id="dateTxt">${fmtDate(d.date)}</span> ✎<input type="date" id="sDate" value="${d.date}"></label>
     </div>
     ${d.parts.map((p, i) => p.kind === 'strength' ? strengthHTML(p, i) : condHTML(p, i)).join('')}
-    <div class="addgrid">
-      <button class="addtile" id="addStrength">${ICON_STR}<b>Strength / Skill</b><span>Sets · weight · reps</span></button>
-      <button class="addtile" id="addCond">${ICON_CON}<b>Conditioning</b><span>For Time · AMRAP · EMOM</span></button>
+    <div class="addstack">
+      <button class="addbar" id="addStrength"><span class="plus">+</span><b>Strength / Skill</b><small>Sets · weight · reps</small></button>
+      <button class="addbar" id="addCond"><span class="plus">+</span><b>Conditioning</b><small>For Time · AMRAP · EMOM</small></button>
     </div>
     ${d.parts.length ? `<textarea id="sNotes" placeholder="Session notes" style="margin-bottom:12px">${esc(d.notes)}</textarea>` : ''}
     <div class="err" id="formErr"></div>
@@ -701,7 +707,7 @@ async function closeSession() {
   const via = d.via;
   draft = null; editingId = null; logMode = 'list'; clearStash();
   renderList();
-  animLayer(via === 'up' ? 'a-downOut' : 'a-rightOut', () => { if (logMode === 'list') layerVisible(false); });
+  animLayer('a-rightOut', () => { if (logMode === 'list') layerVisible(false); });
   if (!empty) setTimeout(() => { const f = idx.flags[s.id]; if (f && f.length) toast('🏆 New PR: ' + f[0]); }, 900);
 }
 
