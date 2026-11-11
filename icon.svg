@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0e0f11"/>
+  <g fill="#ff5b1f" stroke="#ff5b1f" stroke-linecap="round" stroke-linejoin="round">
+    <!-- barbell -->
+    <path d="M62 102 H450" stroke-width="12" fill="none"/>
+    <rect x="76" y="44" width="34" height="116" rx="8" stroke="none"/>
+    <rect x="402" y="44" width="34" height="116" rx="8" stroke="none"/>
+    <!-- arms: wide snatch grip, locked out -->
+    <path d="M222 214 L156 104 M290 214 L356 104" stroke-width="24" fill="none"/>
+    <!-- head -->
+    <circle cx="256" cy="170" r="27" stroke="none"/>
+    <!-- torso -->
+    <path d="M214 210 H298 L284 338 H228 Z" stroke-width="16"/>
+    <!-- thighs: knees out, hips low -->
+    <path d="M236 340 L168 326 M276 340 L344 326" stroke-width="40" fill="none"/>
+    <!-- shins -->
+    <path d="M168 330 L198 432 M344 330 L314 432" stroke-width="32" fill="none"/>
+    <!-- feet -->
+    <path d="M178 446 L214 446 M298 446 L334 446" stroke-width="18" fill="none"/>
+  </g>
+</svg>
