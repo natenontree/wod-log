@@ -261,6 +261,42 @@ nav{z-index:8}
 .addbar b{font-size:15px;font-weight:600;color:#cfd1d4}
 .addbar small{margin-left:auto;font-size:12px;color:#61656c}
 .addbar:active{background:var(--card)}
+.cathead{display:flex;align-items:center;gap:10px;width:100%;padding:14px 2px;border-bottom:1px solid var(--line);text-align:left}
+.cathead span{font-weight:700;font-size:15px}
+.cathead small{color:var(--muted);font-size:12px;background:var(--card2);border-radius:999px;padding:2px 8px}
+.cathead i{margin-left:auto;font-style:normal;color:var(--muted);font-size:20px;transition:transform .2s}
+.cathead.open i{transform:rotate(90deg);color:var(--accent)}
+.catbody{padding-left:10px}
+.catbody .pick{padding:11px 2px}
+#ed.modal{background:rgba(0,0,0,.6);justify-content:center;align-items:center;padding:calc(16px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom))}
+#ed.modal .ed-bar{width:100%;max-width:560px;background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px;border-bottom:1px solid var(--line)}
+#ed.modal .ed-body{width:100%;max-width:560px;flex:0 0 auto;height:min(66vh,560px);background:var(--card);border-radius:0 0 20px 20px;padding:4px 14px 16px}
+#ed.modal .pick,#ed.modal .cathead{border-color:#2b2e34}
+#ed.modal #exSearch{background:var(--card2)}
+/* compact session cards (~30% shorter) */
+#sessBody .part{padding:11px 13px;margin-bottom:9px}
+#sessBody .plabel{font-size:12px}
+#sessBody .btitle{font-size:20px;margin-top:0}
+#sessBody .xbtn{width:28px;height:28px;font-size:19px;flex-basis:28px}
+#sessBody .srow{gap:6px;grid-template-columns:22px 1fr 1fr 44px}
+#sessBody .srow.shd{margin-top:6px;font-size:10px}
+#sessBody .sw{margin-top:5px}
+#sessBody .wbtn,#sessBody .rin,#sessBody .tick{height:34px;font-size:18px}
+#sessBody .tick{font-size:17px}
+#sessBody .sn{font-size:17px}
+#sessBody .addrow{margin-top:7px}
+#sessBody .addrow button{padding:6px 16px;font-size:14px}
+#sessBody .part .small{font-size:12px}
+#sessBody .part .l{margin:8px 0 4px;font-size:11px}
+#sessBody .part .titlein{font-size:20px;padding:2px 0!important}
+#sessBody .part .chip{padding:5px 10px;font-size:13px}
+#sessBody .part .chips{gap:5px}
+#sessBody .part .stepper button{width:36px;flex-basis:36px;font-size:19px}
+#sessBody .part .stepper input,#sessBody .part input:not([type=checkbox]){padding:7px 10px;font-size:15px}
+#sessBody .part .seg{padding:3px}
+#sessBody .part .seg button{padding:6px}
+#sessBody .part .check{margin-top:6px}
+#sessBody .part .exrow{padding:8px 12px}
 </style>
 </head>
 <body>
@@ -325,6 +361,7 @@ const EQ = {
   kettlebell:{ label:'Kettlebell', impl:'KB', presets:[4,6,8,10,12,14,16,20,24,28,32,40] },
   plate:     { label:'Plate',      presets:[1.25,2.5,5,10,15,20,25] },
   medball:   { label:'Med ball',   presets:[3,4,5,6,9,10,12,14] },
+  gymnastics:{ label:'Gymnastics / Cali', presets:[5,9,10,14,20], optional:true },
   bodyweight:{ label:'Bodyweight', presets:[5,9,10,14,20], optional:true },
   cardio:    { label:'Cardio',     noWeight:true },
   other:     { label:'Other',      presets:[5,10,15,20,25,30,40,50,60,80,100,120] }
@@ -336,7 +373,8 @@ const LIB_RAW = {
   kettlebell:['KB Swing (Russian)','KB Swing (American)','Goblet Squat','KB Snatch','KB Clean','KB Deadlift','Turkish Get-up','KB Farmer Carry|m'],
   plate:['Plate GTOH','Plate Overhead Lunge','Plate Front Raise','Plate Sit-up','Plate Pinch Hold|sec'],
   medball:['Wall Ball','Med Ball Clean','Slam Ball','Med Ball Sit-up'],
-  bodyweight:['Pull-up','Strict Pull-up','Chest-to-bar Pull-up','Toes-to-bar','Knees-to-elbow','Bar Muscle-up','Ring Muscle-up','HSPU','Strict HSPU','Wall Walk','Handstand Walk|m','Push-up','Ring Dip','Burpee','Bar-facing Burpee','Burpee Box Jump Over','Box Jump','Box Jump Over','Air Squat','Pistol','Walking Lunge','Sit-up','GHD Sit-up','V-up','Double-under','Single-under','Rope Climb','Legless Rope Climb','Plank|sec','L-sit|sec'],
+  gymnastics:['Pull-up','Strict Pull-up','Chest-to-bar Pull-up','Toes-to-bar','Knees-to-elbow','Bar Muscle-up','Ring Muscle-up','Strict Ring Muscle-up','HSPU','Strict HSPU','Wall Walk','Handstand Walk|m','Handstand Hold|sec','Ring Dip','Ring Row','Rope Climb','Legless Rope Climb','Pistol','Double-under','L-sit|sec','Front Lever Hold|sec','Skin the Cat'],
+  bodyweight:['Push-up','Burpee','Bar-facing Burpee','Burpee Box Jump Over','Box Jump','Box Jump Over','Air Squat','Walking Lunge','Jumping Lunge','Sit-up','GHD Sit-up','V-up','Single-under','Plank|sec'],
   cardio:['Row','Ski Erg','Bike Erg','Assault / Echo Bike','Run|m','Shuttle Run|m'],
   other:['Sled Push|m','Sled Pull|m','Sandbag Carry|m','Sandbag Clean','Sandbag Over Shoulder']
 };
@@ -687,7 +725,7 @@ function openSession(s) {
   animLayer(draft.via === 'up' ? 'a-upIn' : 'a-rightIn');
   stashDraft();
 }
-async function closeSession() {
+async function closeSession(dir = 'right') {
   const d = draft;
   const parts = d.parts.filter(p => p.kind === 'strength' || p.name || p.ex.length || scoreStr(p)).map(p => clone(p));
   const existing = sessions.find(s => s.id === d.id);
@@ -707,7 +745,7 @@ async function closeSession() {
   const via = d.via;
   draft = null; editingId = null; logMode = 'list'; clearStash();
   renderList();
-  animLayer('a-rightOut', () => { if (logMode === 'list') layerVisible(false); });
+  animLayer(dir === 'down' ? 'a-downOut' : 'a-rightOut', () => { if (logMode === 'list') layerVisible(false); });
   if (!empty) setTimeout(() => { const f = idx.flags[s.id]; if (f && f.length) toast('🏆 New PR: ' + f[0]); }, 900);
 }
 
@@ -809,7 +847,8 @@ logEl.addEventListener('click', async e => {
   if (op) { const s = sessions.find(x => x.id === op.dataset.open); if (s) openSession(s); return; }
   if (!draft) return;
   // session
-  if (t.closest('#closeBtn') || t.closest('#closeTop')) return closeSession();
+  if (t.closest('#closeBtn')) return closeSession('down');
+  if (t.closest('#closeTop')) return closeSession('right');
   if (t.closest('#addStrength')) return openStrengthPicker();
   if (t.closest('#addCond')) { draft.parts.push({ ...newPart(), kind:'conditioning' }); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return; }
   const card = t.closest('.part'); if (!card) return;
@@ -1028,11 +1067,11 @@ function openEditor(pi, j) {
 }
 function openStrengthPicker() {
   ed = { mode:'strength', view:'pick', d:null, sel:'all', q:'' };
-  $('#ed').classList.add('on'); document.body.style.overflow = 'hidden';
+  $('#ed').classList.add('on', 'modal'); document.body.style.overflow = 'hidden';
   renderEditor();
   setTimeout(() => { const s = $('#exSearch'); if (s) s.focus(); }, 50);
 }
-function closeEditor() { ed = null; $('#ed').classList.remove('on'); document.body.style.overflow = ''; }
+function closeEditor() { ed = null; $('#ed').classList.remove('on', 'modal'); document.body.style.overflow = ''; }
 function commonW(d) { const ws = d.sets.map(s => s.w || 0); return ws.length ? ws[0] : 0; }
 
 function renderEditor() {
@@ -1072,15 +1111,17 @@ function renderPickList() {
   const q = norm(ed.q), all = allExercises(), el = $('#pickList');
   let html = '';
   if (!q) {
-    const rec = recentExercises();
-    if (rec.length) html += `<div class="pickhead">Recent</div>` + rec.map(pickRow).join('');
+    ed.open = ed.open || new Set();
     for (const eq of EQ_ORDER) {
       const items = Object.values(all).filter(e => e.equip === eq).sort((a, b) => a.name.localeCompare(b.name));
-      if (items.length) html += `<div class="pickhead">${EQ[eq].label}</div>` + items.map(pickRow).join('');
+      if (!items.length) continue;
+      const open = ed.open.has(eq);
+      html += `<button class="cathead ${open ? 'open' : ''}" data-cat="${eq}"><span>${EQ[eq].label}</span><small>${items.length}</small><i>›</i></button>`;
+      if (open) html += `<div class="catbody">${items.map(e => pickRow(e, true)).join('')}</div>`;
     }
   } else {
     const items = Object.values(all).filter(e => norm(e.name).includes(q)).sort((a, b) => (norm(a.name).startsWith(q) ? 0 : 1) - (norm(b.name).startsWith(q) ? 0 : 1) || a.name.localeCompare(b.name));
-    html += items.map(pickRow).join('');
+    html += items.map(e => pickRow(e)).join('');
     if (!all[q]) {
       html += `<div class="pickhead">Create “${esc(ed.q.trim())}”</div><div class="small" style="margin-bottom:8px">Pick its equipment — this sets the weight pad.</div>
         <div class="chips">${EQ_ORDER.map(k => `<button class="chip" data-neweq="${k}">${EQ[k].label}</button>`).join('')}</div>`;
@@ -1088,7 +1129,7 @@ function renderPickList() {
   }
   el.innerHTML = html;
 }
-const pickRow = e => `<button class="pick" data-pick="${esc(e.name)}"><span>${esc(e.name)}</span><small>${EQ[e.equip] ? EQ[e.equip].label : ''}${e.unit && e.unit !== 'reps' ? ' · ' + e.unit : ''}</small></button>`;
+const pickRow = (e, inCat) => `<button class="pick" data-pick="${esc(e.name)}"><span>${esc(e.name)}</span><small>${[inCat ? '' : (EQ[e.equip] ? EQ[e.equip].label : ''), e.unit && e.unit !== 'reps' ? e.unit : ''].filter(Boolean).join(' · ')}</small></button>`;
 
 function choose(item) {
   if (ed.mode === 'strength') {
@@ -1201,7 +1242,10 @@ edEl.addEventListener('input', e => {
 });
 edEl.addEventListener('click', async e => {
   const t = e.target; if (!ed) return;
+  if (ed.mode === 'strength' && t.id === 'ed') { closeEditor(); return; }
   if (t.closest('#edCancel')) { if (ed.view === 'pick' && ed.d) { ed.view = 'edit'; renderEditor(); } else closeEditor(); return; }
+  const cat = t.closest('[data-cat]');
+  if (cat) { ed.open = ed.open || new Set(); const k = cat.dataset.cat; ed.open.has(k) ? ed.open.delete(k) : ed.open.add(k); renderPickList(); return; }
   const pk = t.closest('[data-pick]');
   if (pk) { const item = allExercises()[norm(pk.dataset.pick)]; if (item) choose(item); return; }
   const ne = t.closest('[data-neweq]');
