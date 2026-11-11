@@ -13,13 +13,20 @@
 <meta name="apple-mobile-web-app-title" content="WOD Log">
 <meta name="theme-color" content="#0e0f11">
 <script>
-// Home-screen icon: draw the real 🏋️ emoji with the phone's own emoji font (Apple's on iPhone)
+// Home-screen icon: draw the real 🏋️ emoji with the phone's own emoji font (Apple's on iPhone),
+// then measure the drawn pixels and centre them exactly (emoji fonts sit off-centre by default)
 (function () { try {
-  var c = document.createElement('canvas'); c.width = c.height = 180;
-  var x = c.getContext('2d'); x.fillStyle = '#0e0f11'; x.fillRect(0, 0, 180, 180);
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = '128px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-  x.fillText(String.fromCodePoint(0x1F3CB, 0xFE0F), 90, 98);
+  var S = 320, t = document.createElement('canvas'); t.width = t.height = S;
+  var tx = t.getContext('2d'); tx.textAlign = 'center'; tx.textBaseline = 'middle';
+  tx.font = '200px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  tx.fillText(String.fromCodePoint(0x1F3CB, 0xFE0F), S / 2, S / 2);
+  var d = tx.getImageData(0, 0, S, S).data, x0 = S, y0 = S, x1 = -1, y1 = -1;
+  for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) if (d[(y * S + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return;
+  var w = x1 - x0 + 1, h = y1 - y0 + 1, N = 180, box = N * 0.72, k = Math.min(box / w, box / h);
+  var c = document.createElement('canvas'); c.width = c.height = N;
+  var cx = c.getContext('2d'); cx.fillStyle = '#0e0f11'; cx.fillRect(0, 0, N, N);
+  cx.drawImage(t, x0, y0, w, h, (N - w * k) / 2, (N - h * k) / 2, w * k, h * k);
   var l = document.querySelector('link[rel="apple-touch-icon"]'); if (l) l.href = c.toDataURL('image/png');
 } catch (e) {} })();
 </script>
