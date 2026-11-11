@@ -213,6 +213,30 @@ svg.chart{width:100%;height:auto;display:block;margin-top:10px}
 #wsheet #wsOk{margin-top:10px!important;padding:12px}
 .dbgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 #wsheet .dbgrid .preset{padding:10px 0}
+.xbtn{width:32px;height:32px;border-radius:50%;background:var(--card2);color:var(--muted);font-size:22px;line-height:1;display:grid;place-items:center;flex:0 0 32px}
+.addrow{display:flex;justify-content:center;margin-top:14px}
+.addrow button{color:var(--accent);font-weight:700;font-size:15px;padding:10px 20px;border-radius:999px;background:rgba(255,91,31,.12)}
+.sw{position:relative;overflow:hidden;border-radius:10px;margin-top:8px}
+.sw .srow,.sw .exrow{margin-top:0}
+.sw-del{position:absolute;right:0;top:0;bottom:0;width:84px;background:var(--bad);color:#fff;font-weight:700;font-size:14px}
+.sw-c{position:relative;z-index:1;background:var(--card);transition:transform .22s ease;touch-action:pan-y}
+.lirow{border-radius:0;margin:0;border-bottom:1px solid var(--line)}
+.lirow .sw-c{background:var(--bg)}
+.li{display:block;width:100%;text-align:left;padding:14px 2px}
+.li-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.li-top b{font-size:16px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li-top span{font-size:13px;color:var(--muted);flex:0 0 auto}
+.li-prev{font-size:14px;color:var(--muted);margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prdot{color:var(--accent2);font-weight:600}
+.fab{position:fixed;right:max(20px,calc(50% - 260px));bottom:calc(84px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;background:var(--accent);color:#fff;font-size:34px;line-height:1;box-shadow:0 6px 22px rgba(255,91,31,.45);z-index:6;display:grid;place-items:center}
+.fab:active{transform:scale(.94)}
+.snack{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(16px);background:#2b2e34;color:var(--text);border-radius:12px;padding:8px 8px 8px 16px;display:flex;gap:14px;align-items:center;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:41;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.snack.on{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+.snack button{color:var(--accent);font-weight:700;padding:6px 10px}
+.logempty{padding:90px 20px}
+.sesshead{padding:0 0 12px}
+.sesshead .titlein{text-align:left;width:100%}
+.dateline{display:inline-block}
 </style>
 </head>
 <body>
@@ -227,17 +251,12 @@ svg.chart{width:100%;height:auto;display:block;margin-top:10px}
   <div class="status" id="status"></div>
 
   <section class="view on" id="v-log"><div id="logForm"></div></section>
-  <section class="view" id="v-history">
-    <input id="hSearch" placeholder="Search WODs, exercises, notes…">
-    <div id="historyList"></div>
-  </section>
   <section class="view" id="v-exercises"><div id="exView"></div></section>
   <section class="view" id="v-progress"><div id="progView"></div></section>
 </div>
 
 <nav><div>
   <button data-v="log" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Log</button>
-  <button data-v="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>History</button>
   <button data-v="exercises"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8"/></svg>Exercises</button>
   <button data-v="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 16l4-5 4 3 6-8"/></svg>Progress</button>
 </div></nav>
@@ -271,6 +290,7 @@ svg.chart{width:100%;height:auto;display:block;margin-top:10px}
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
 (() => {
@@ -339,7 +359,7 @@ const sum = a => a.reduce((x, y) => x + y, 0);
 const unitSfx = u => u === 'reps' ? '' : ' ' + u;
 
 function newPart() { return { name:'', format:'time', rounds:1, every:2, cap:'', score:{}, rx:true, notes:'', ex:[] }; }
-function newDraft() { return { date: todayStr(), name:'', parts:[], rpe:7, notes:'' }; }
+function newDraft() { return { id: uid(), date: todayStr(), name:'', parts:[], rpe:7, notes:'' }; }
 
 function fmtLabel(p) {
   switch (p.format) {
@@ -478,10 +498,6 @@ function clearStash() { try { localStorage.removeItem('wodlog.draft'); } catch (
 // ================= LOG FORM =================
 const stepper = (attr, val, ph = '') => `<div class="stepper"><button data-stp="-1" aria-label="minus">−</button><input ${attr} value="${esc(val)}" inputmode="numeric" placeholder="${ph}"><button data-stp="1" aria-label="plus">+</button></div>`;
 
-function exRows(p) {
-  if (!p.ex.length) return `<div class="small" style="margin-top:8px">No exercises yet.</div>`;
-  return p.ex.map((x, j) => `<button class="exrow" data-j="${j}"><div><b>${esc(x.name)}</b><span class="small">${esc(schemeStr(x))}</span></div><span class="chev">›</span></button>`).join('');
-}
 function scoreHTML(p) {
   const s = p.score || {};
   switch (p.format) {
@@ -514,7 +530,7 @@ function normParts(parts) {
 function lastTime(name) {
   const k = norm(name);
   const list = [...sessions].filter(s => s.id !== editingId).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
-  for (const s of list) for (const p of s.parts) for (const x of p.ex) if (norm(x.name) === k && x.sets.length) return { date:s.date, str:schemeStr(x) };
+  for (const s of list) for (const p of s.parts) for (const x of p.ex) if (norm(x.name) === k) { const lx = exLive(x); if (lx.sets.length) return { date:s.date, str:schemeStr(lx) }; }
   return null;
 }
 
@@ -525,73 +541,183 @@ function effW(x, k) {
 }
 const BWL = '<span class="bwl">Bodyweight</span>';
 const wLbl = (x, w) => w == null ? ((EQ[x.equip] || {}).optional ? BWL : '+ kg') : w > 0 ? (x.impl === 2 && EQ[x.equip] && EQ[x.equip].impl ? '2×' + num(w) : num(w)) : ((x.equip === 'barbell' || (EQ[x.equip] || {}).optional) ? BWL : '0');
+// sets that count: ticked sets if any are ticked, otherwise sets with reps; weights resolved
+function liveSets(x) {
+  const sets = x.sets || [];
+  if (!sets.some(s => 'done' in s)) return sets.filter(s => s.r > 0);
+  const any = sets.some(s => s.done);
+  return sets.map((s, k) => ({ r:s.r, w: s.w != null ? s.w : (effW(x, k) ?? 0), done:s.done })).filter(s => any ? s.done : s.r > 0);
+}
+const exLive = x => ({ ...x, sets: liveSets(x) });
+const swWrap = (kind, attrs, inner, cls = '') => `<div class="sw ${cls}" data-sw="${kind}" ${attrs}><button class="sw-del" tabindex="-1">Delete</button><div class="sw-c">${inner}</div></div>`;
+
+let logMode = 'list', listQ = '';
+
 function strengthHTML(p, i) {
   const x = p.ex[0], E = EQ[x.equip] || EQ.other, last = lastTime(x.name);
   const rows = x.sets.map((s, k) => {
     const prev = k > 0 ? x.sets[k - 1] : null;
     const own = s.w != null && (s.done || s.w > 0 || x.equip === 'barbell' || s.set);
     const wTxt = E.noWeight ? '—' : own ? wLbl(x, s.w) : `<span class="dim">${wLbl(x, effW(x, k))}</span>`;
-    return `<div class="srow ${s.done ? 'done' : ''}" data-k="${k}"><span class="sn">${k + 1}</span>
+    return swWrap('set', `data-k="${k}"`, `<div class="srow ${s.done ? 'done' : ''}" data-k="${k}"><span class="sn">${k + 1}</span>
       <button class="wbtn" ${E.noWeight ? 'disabled' : ''}>${wTxt}</button>
       <input class="rin" inputmode="decimal" value="${s.r || ''}" placeholder="${prev && prev.r ? prev.r : '0'}">
-      <button class="tick" aria-label="Mark set done">✓</button></div>`;
+      <button class="tick" aria-label="Mark set done">✓</button></div>`);
   }).join('');
   return `<div class="card part sblock" data-p="${i}">
-    <div class="between"><div><div class="plabel">Strength / Skill</div><h3 class="btitle">${esc(x.name)}</h3></div><button class="linkbtn rmPart">Remove</button></div>
+    <div class="between"><div><div class="plabel">Strength / Skill</div><h3 class="btitle">${esc(x.name)}</h3></div><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
     ${last ? `<div class="small" style="margin-top:2px">Last time: ${esc(last.str)} · ${fmtShort(last.date)}</div>` : ''}
     <div class="srow shd"><span>Set</span><span>${E.noWeight ? '' : E.optional ? 'Added kg' : E.impl ? (x.impl === 2 ? 'kg · dual' : 'kg · single') : 'kg'}</span><span>${x.unit === 'reps' ? 'Reps' : x.unit}</span><span></span></div>
     ${rows}
-    <div class="row" style="margin-top:12px"><button class="btn ghost addSet">+ Add set</button>${x.sets.length > 1 ? '<button class="btn ghost rmSet">− Remove set</button>' : ''}</div>
+    <div class="addrow"><button class="addSet">+ Add set</button></div>
   </div>`;
+}
+function exRows(p) {
+  if (!p.ex.length) return `<div class="small" style="margin-top:8px">No exercises yet.</div>`;
+  return p.ex.map((x, j) => swWrap('ex', `data-j="${j}"`, `<button class="exrow" data-j="${j}"><div><b>${esc(x.name)}</b><span class="small">${esc(schemeStr(x))}</span></div><span class="chev">›</span></button>`)).join('');
 }
 function condHTML(p, i) {
   const F = FORMATS[p.format] || FORMATS.time;
   return `<div class="card part cblock" data-p="${i}">
-    <div class="between"><span class="plabel">Conditioning</span><button class="linkbtn rmPart">Remove</button></div>
+    <div class="between"><span class="plabel">Conditioning</span><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
     <input class="titlein" data-f="name" placeholder="${esc(F.label)} WOD" value="${esc(p.name)}">
     <div class="chips" style="margin-top:8px">${Object.entries(FORMATS).filter(([k]) => k !== 'strength').map(([k, f]) => `<button class="chip fmt ${k === p.format ? 'on' : ''}" data-fmt="${k}">${f.label}</button>`).join('')}</div>
     <div class="${F.extra ? 'grid2' : ''}" style="margin-top:4px">
       <div><label class="l">${F.count}</label>${stepper('data-f="rounds"', p.rounds)}</div>
       ${F.extra ? `<div><label class="l">${F.extra.label}</label>${stepper(`data-f="${F.extra.k}"`, p[F.extra.k] ?? '', F.extra.k === 'cap' ? '—' : '')}</div>` : ''}
     </div>
+    <label class="l">Score</label>${scoreHTML(p)}
+    <div class="seg rxSeg" style="margin-top:10px"><button data-rx="1" class="${p.rx ? 'on' : ''}">Rx</button><button data-rx="0" class="${!p.rx ? 'on' : ''}">Scaled</button></div>
     <label class="l">Exercises</label>
     <div class="exlist">${exRows(p)}</div>
-    <button class="btn dashed addEx" style="margin-top:8px">+ Add exercise</button>
-    <label class="l">Score</label>${scoreHTML(p)}
-    <div class="seg rxSeg" style="margin-top:12px"><button data-rx="1" class="${p.rx ? 'on' : ''}">Rx</button><button data-rx="0" class="${!p.rx ? 'on' : ''}">Scaled</button></div>
-    <textarea data-f="notes" placeholder="Notes — scaling, splits…" style="margin-top:10px">${esc(p.notes)}</textarea>
+    <div class="addrow"><button class="addEx">+ Add exercise</button></div>
   </div>`;
 }
 const ICON_STR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8"/></svg>`;
 const ICON_CON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>`;
-function renderLog() {
+
+// ---- session list (Log home) ----
+function sessionPreview(s) {
+  return s.parts.map(p => {
+    if (p.kind === 'strength' && p.ex[0]) { const x = exLive(p.ex[0]); return x.sets.length ? `${x.name} ${schemeStr(x)}` : x.name; }
+    const sc = scoreStr(p); return `${p.name || fmtLabel(p)}${sc ? ' ' + sc : ''}`;
+  }).join(' · ') || (s.notes || 'Empty session');
+}
+function renderListBody() {
+  const q = norm(listQ);
+  let list = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+  if (q) list = list.filter(s => (norm(s.name) + ' ' + norm(autoTitle(s)) + ' ' + JSON.stringify([s.parts, s.notes]).toLowerCase()).includes(q));
+  const el = $('#listBody'); if (!el) return;
+  if (!list.length) { el.innerHTML = sessions.length ? `<div class="empty"><b>No matches</b>Try another search.</div>` : `<div class="empty logempty"><b>No sessions yet</b>Tap + to start your first workout.</div>`; return; }
+  let html = '', month = '';
+  for (const s of list) {
+    const mo = parseDate(s.date).toLocaleDateString('en-GB', { month:'long', year:'numeric' });
+    if (mo !== month) { month = mo; html += `<div class="month">${mo}</div>`; }
+    const prs = (idx.flags[s.id] || []).length;
+    html += swWrap('sess', `data-id="${esc(s.id)}"`, `<button class="li" data-open="${esc(s.id)}">
+      <div class="li-top"><b>${esc(s.name || autoTitle(s))}</b><span>${fmtShort(s.date)}</span></div>
+      <div class="li-prev">${prs ? `<span class="prdot">🏆 ${prs} PR${prs > 1 ? 's' : ''}</span> ` : ''}${esc(sessionPreview(s))}</div></button>`, 'lirow');
+  }
+  el.innerHTML = html;
+}
+function renderList() {
+  $('#logForm').innerHTML = `${sessions.length ? `<input id="lSearch" placeholder="Search sessions" value="${esc(listQ)}" style="margin-bottom:4px">` : ''}<div id="listBody"></div>
+    <button class="fab" id="newSess" aria-label="New session">+</button>`;
+  renderListBody();
+}
+// ---- one session (note-style) ----
+function renderSession() {
   const d = draft;
   $('#logForm').innerHTML = `
+    <button class="backbtn" id="closeTop">‹ Sessions</button>
     <div class="sesshead">
       <input id="sTitle" class="titlein big" placeholder="${esc(autoTitle(d))}" value="${esc(d.name || '')}">
-      <div class="between"><label class="dateline"><span id="dateTxt">${fmtDate(d.date)}</span> ✎<input type="date" id="sDate" value="${d.date}"></label>
-      ${editingId ? '<button class="linkbtn" id="cancelEdit">Cancel edit</button>' : (d.parts.length ? '<button class="linkbtn" id="clearDraft">Discard</button>' : '')}</div>
+      <label class="dateline"><span id="dateTxt">${fmtDate(d.date)}</span> ✎<input type="date" id="sDate" value="${d.date}"></label>
     </div>
     ${d.parts.map((p, i) => p.kind === 'strength' ? strengthHTML(p, i) : condHTML(p, i)).join('')}
     <div class="addgrid">
       <button class="addtile" id="addStrength">${ICON_STR}<b>Strength / Skill</b><span>Sets · weight · reps</span></button>
       <button class="addtile" id="addCond">${ICON_CON}<b>Conditioning</b><span>For Time · AMRAP · EMOM</span></button>
     </div>
-    ${d.parts.length ? `<div class="card">
-      <div class="rpe"><span class="small" style="flex:0 0 auto">Effort</span><input type="range" min="1" max="10" value="${d.rpe}" id="sRpe"><b id="rpeVal">${d.rpe}</b></div>
-      <textarea id="sNotes" placeholder="Session notes" style="margin-top:8px">${esc(d.notes)}</textarea>
-      <div class="err" id="formErr"></div>
-      <button class="btn" id="saveBtn" style="margin-top:4px">${editingId ? 'Update session' : 'Finish & save'}</button>
-    </div>` : ''}`;
+    ${d.parts.length ? `<textarea id="sNotes" placeholder="Session notes" style="margin-bottom:12px">${esc(d.notes)}</textarea>` : ''}
+    <div class="err" id="formErr"></div>
+    <button class="btn" id="closeBtn">Close session</button>`;
 }
+function renderLog() { if (logMode === 'session' && draft) renderSession(); else { logMode = 'list'; renderList(); } }
 function rerenderPart(pi) {
   const card = $(`#logForm .part[data-p="${pi}"]`), p = draft.parts[pi];
   if (card) card.outerHTML = p.kind === 'strength' ? strengthHTML(p, pi) : condHTML(p, pi);
   const t = $('#sTitle'); if (t) t.placeholder = autoTitle(draft);
 }
+function openSession(s) {
+  draft = s ? clone({ id:s.id, date:s.date, name:s.name || '', parts:normParts(clone(s.parts)), rpe:s.rpe || 7, notes:s.notes || '' }) : newDraft();
+  editingId = draft.id; logMode = 'session';
+  renderLog(); window.scrollTo(0, 0); stashDraft();
+}
+async function closeSession() {
+  const d = draft;
+  const parts = d.parts.filter(p => p.kind === 'strength' || p.name || p.ex.length || scoreStr(p)).map(p => clone(p));
+  const existing = sessions.find(s => s.id === d.id);
+  const empty = !parts.length && !(d.name || '').trim() && !(d.notes || '').trim();
+  const now = Date.now();
+  const s = { v:2, id:d.id, date:d.date, name:(d.name || '').trim(), parts, rpe:d.rpe || 7, notes:(d.notes || '').trim(),
+    createdAt: existing ? existing.createdAt || now : now, updatedAt: now };
+  const btn = $('#closeBtn'); if (btn) btn.disabled = true;
+  try {
+    if (empty) { if (existing) await Store.remove(existing.id); }
+    else await Store.save(s);
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    $('#formErr').textContent = e && e.code === 'quota_exceeded' ? 'Storage is full — delete some old sessions.' : "Couldn't save — check your connection and try again.";
+    return;
+  }
+  draft = null; editingId = null; logMode = 'list'; clearStash();
+  renderLog(); window.scrollTo(0, 0);
+  if (!empty) setTimeout(() => { const f = idx.flags[s.id]; if (f && f.length) toast('🏆 New PR: ' + f[0]); }, 900);
+}
+
+// undo snackbar
+let snackT, snackFn = null;
+function snack(msg, undo) {
+  const el = $('#snack'); el.querySelector('span').textContent = msg; snackFn = undo;
+  el.classList.add('on'); clearTimeout(snackT); snackT = setTimeout(() => { el.classList.remove('on'); snackFn = null; }, 4500);
+}
+$('#snack button').addEventListener('click', () => { const f = snackFn; snackFn = null; $('#snack').classList.remove('on'); if (f) f(); });
+
+// swipe-left to reveal Delete (sets, exercises, sessions)
+let swp = null, swOpen = null, swBlock = false;
+function swClose(el) { if (!el) return; const c = el.querySelector('.sw-c'); if (c) c.style.transform = ''; el.classList.remove('open'); if (swOpen === el) swOpen = null; }
+document.addEventListener('pointerdown', e => {
+  const c = e.target.closest('.sw-c');
+  if (swOpen && !e.target.closest('.sw-del') && (!c || c.parentElement !== swOpen)) swClose(swOpen);
+  if (!c) { swp = null; return; }
+  const el = c.parentElement;
+  swp = { el, c, x:e.clientX, y:e.clientY, dx:0, active:false, base: el.classList.contains('open') ? -84 : 0, tapClose: el === swOpen };
+});
+document.addEventListener('pointermove', e => {
+  if (!swp) return;
+  const dx = e.clientX - swp.x, dy = e.clientY - swp.y;
+  if (!swp.active) {
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.4) { swp.active = true; swp.c.style.transition = 'none'; if (document.activeElement && swp.c.contains(document.activeElement)) document.activeElement.blur(); }
+    else if (Math.abs(dy) > 10) { swp = null; return; }
+    else return;
+  }
+  swp.dx = dx;
+  swp.c.style.transform = `translateX(${Math.min(0, Math.max(-120, swp.base + dx))}px)`;
+  e.preventDefault();
+}, { passive:false });
+function swEnd() {
+  if (!swp) return; const s = swp; swp = null;
+  if (!s.active) { if (s.tapClose) { swClose(s.el); swBlock = true; setTimeout(() => swBlock = false, 60); } return; }
+  s.c.style.transition = ''; swBlock = true; setTimeout(() => swBlock = false, 60);
+  if (s.base + s.dx < -42) { s.c.style.transform = 'translateX(-84px)'; s.el.classList.add('open'); swOpen = s.el; } else swClose(s.el);
+}
+document.addEventListener('pointerup', swEnd);
+document.addEventListener('pointercancel', () => { if (swp && swp.active) swEnd(); else swp = null; });
+document.addEventListener('click', e => { if (swBlock && !e.target.closest('.sw-del')) { e.stopPropagation(); e.preventDefault(); swBlock = false; } }, true);
 
 function setPartField(p, f, t, card) {
-  if (f === 'name' || f === 'notes') { p[f] = t.value; if (f === 'name') $('#sTitle').placeholder = autoTitle(draft); }
+  if (f === 'name') { p.name = t.value; $('#sTitle').placeholder = autoTitle(draft); }
   else if (f === 'rounds') { p.rounds = clampInt(t.value, 1, 100); p.ex.forEach(x => { if (x.linked) { x.count = p.rounds; regen(x); } }); card.querySelector('.exlist').innerHTML = exRows(p); }
   else if (f === 'cap') p.cap = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0);
   else if (f === 'every') p.every = clampInt(t.value, 1, 30);
@@ -608,9 +734,10 @@ function setPartField(p, f, t, card) {
 const logEl = $('#logForm');
 logEl.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'lSearch') { listQ = t.value; renderListBody(); return; }
+  if (!draft) return;
   if (t.id === 'sTitle') { draft.name = t.value; stashDraft(); return; }
   if (t.id === 'sDate') { if (t.value) { draft.date = t.value; $('#dateTxt').textContent = fmtDate(t.value); stashDraft(); } return; }
-  if (t.id === 'sRpe') { draft.rpe = +t.value; $('#rpeVal').textContent = t.value; stashDraft(); return; }
   if (t.id === 'sNotes') { draft.notes = t.value; stashDraft(); return; }
   const card = t.closest('.part'); if (!card) return;
   const p = draft.parts[+card.dataset.p];
@@ -619,27 +746,42 @@ logEl.addEventListener('input', e => {
   setPartField(p, t.dataset.f, t, card);
 });
 logEl.addEventListener('change', e => {
-  const t = e.target;
+  const t = e.target; if (!draft) return;
   if (t.id === 'sDate' && t.value) { draft.date = t.value; $('#dateTxt').textContent = fmtDate(t.value); stashDraft(); return; }
   if (t.type !== 'checkbox') return;
   const card = t.closest('.part'); setPartField(draft.parts[+card.dataset.p], t.dataset.f, t, card);
 });
 function scrollToPart(pi) { setTimeout(() => { const c = $(`#logForm .part[data-p="${pi}"]`); if (c) c.scrollIntoView({ behavior:'smooth', block:'start' }); }, 30); }
-logEl.addEventListener('click', e => {
+logEl.addEventListener('click', async e => {
   const t = e.target;
-  if (t.closest('#saveBtn')) return saveSession();
+  // list
+  if (t.closest('#newSess')) return openSession(null);
+  const del = t.closest('.sw-del');
+  if (del) {
+    const sw = del.closest('.sw'), kind = sw.dataset.sw; swOpen = null;
+    if (kind === 'sess') {
+      const s = sessions.find(x => x.id === sw.dataset.id); if (!s) return;
+      try { await Store.remove(s.id); snack('Session deleted', () => Store.save(s).catch(() => toast("Couldn't restore"))); } catch (err) { toast("Couldn't delete — try again"); }
+      return;
+    }
+    const card = sw.closest('.part'), pi = +card.dataset.p, p = draft.parts[pi];
+    if (kind === 'set') { p.ex[0].sets.splice(+sw.dataset.k, 1); rerenderPart(pi); stashDraft(); return; }
+    if (kind === 'ex') { p.ex.splice(+sw.dataset.j, 1); rerenderPart(pi); stashDraft(); return; }
+    return;
+  }
+  const op = t.closest('[data-open]');
+  if (op) { const s = sessions.find(x => x.id === op.dataset.open); if (s) openSession(s); return; }
+  if (!draft) return;
+  // session
+  if (t.closest('#closeBtn') || t.closest('#closeTop')) return closeSession();
   if (t.closest('#addStrength')) return openStrengthPicker();
   if (t.closest('#addCond')) { draft.parts.push({ ...newPart(), kind:'conditioning' }); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return; }
-  if (t.closest('#cancelEdit') || t.closest('#clearDraft')) {
-    if (t.closest('#clearDraft') && !t.closest('#clearDraft').dataset.sure) { const b = t.closest('#clearDraft'); b.dataset.sure = '1'; b.textContent = 'Tap again to discard'; b.style.color = 'var(--bad)'; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Discard'; b.style.color = ''; } }, 3000); return; }
-    editingId = null; draft = newDraft(); clearStash(); renderLog(); return;
-  }
   const card = t.closest('.part'); if (!card) return;
   const pi = +card.dataset.p, p = draft.parts[pi];
   if (t.closest('.rmPart')) {
-    const b = t.closest('.rmPart');
-    if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Tap to confirm'; b.style.color = 'var(--bad)'; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Remove'; b.style.color = ''; } }, 3000); return; }
-    draft.parts.splice(pi, 1); renderLog(); stashDraft(); return;
+    const removed = draft.parts.splice(pi, 1)[0]; renderLog(); stashDraft();
+    snack(`${removed.kind === 'strength' ? removed.name : (removed.name || 'Conditioning')} deleted`, () => { if (!draft) return; draft.parts.splice(Math.min(pi, draft.parts.length), 0, removed); renderLog(); stashDraft(); });
+    return;
   }
   if (p.kind === 'strength') {
     const x = p.ex[0], E = EQ[x.equip] || EQ.other;
@@ -656,7 +798,6 @@ logEl.addEventListener('click', e => {
       rerenderPart(pi); stashDraft(); return;
     }
     if (t.closest('.addSet')) { x.sets.push({ r:0, w:null, done:false }); rerenderPart(pi); stashDraft(); return; }
-    if (t.closest('.rmSet')) { x.sets.pop(); rerenderPart(pi); stashDraft(); return; }
     return;
   }
   const stp = t.closest('[data-stp]');
@@ -675,35 +816,6 @@ logEl.addEventListener('click', e => {
   if (t.closest('.addEx')) return openEditor(pi, null);
   const er = t.closest('.exrow'); if (er) return openEditor(pi, +er.dataset.j);
 });
-
-async function saveSession() {
-  const err = $('#formErr');
-  const parts = draft.parts.map(p => {
-    if (p.kind === 'strength') {
-      const x = p.ex[0], any = x.sets.some(s => s.done);
-      const sets = x.sets.filter(s => any ? s.done : s.r > 0).map(s => ({ r:s.r, w:s.w || 0, done:true }));
-      if (!sets.length) return null;
-      const q = clone(p); q.ex[0].sets = sets; q.rounds = sets.length; return q;
-    }
-    return (p.name || p.ex.length || scoreStr(p) || p.notes) ? clone(p) : null;
-  }).filter(Boolean);
-  if (!parts.length) { err.textContent = 'Tick at least one set, or add an exercise to your conditioning.'; return; }
-  err.textContent = '';
-  const existing = editingId && sessions.find(s => s.id === editingId);
-  const now = Date.now();
-  const s = { v:2, id: editingId || uid(), date: draft.date, name: (draft.name || '').trim(), parts, rpe: draft.rpe, notes: draft.notes.trim(),
-    createdAt: existing ? existing.createdAt || now : now, updatedAt: now };
-  const btn = $('#saveBtn'); btn.disabled = true;
-  try {
-    await Store.save(s);
-    const wasEdit = !!editingId;
-    editingId = null; draft = newDraft(); clearStash(); renderLog(); window.scrollTo(0, 0);
-    toast(wasEdit ? 'Session updated' : 'Session saved 💪');
-    setTimeout(() => { const f = idx.flags[s.id]; if (f && f.length) toast('🏆 New PR: ' + f[0]); }, 1200);
-  } catch (e) {
-    err.textContent = e && e.code === 'quota_exceeded' ? 'Storage is full — delete some old sessions.' : "Couldn't save — check your connection and try again.";
-  } finally { btn.disabled = false; }
-}
 
 // ================= WEIGHT SHEET (strength sets) =================
 const BUMPERS = [25, 20, 15, 10, 5], CHANGE = [2.5, 2, 1.5, 1, 0.5];
@@ -1126,7 +1238,7 @@ function computeIndex() {
     const f = flags[s.id] = [];
     s.parts.forEach(p => {
       p.ex.forEach(x => {
-        if (!x.sets || !x.sets.length) return;
+        x = exLive(x); if (!x.sets.length) return;
         const k = norm(x.name);
         const E = ex[k] ||= { key:k, name:x.name, equip:x.equip, occ:[], maxW:0, maxWDate:null, rm:{}, e1:0, totals:{}, ton:0, last:null };
         E.equip = x.equip;
@@ -1159,52 +1271,6 @@ function computeIndex() {
   }
   idx = { ex, wods, flags };
 }
-
-// ================= HISTORY =================
-const openIds = new Set(), sureDel = new Set();
-function renderHistory() {
-  const q = norm($('#hSearch').value);
-  let list = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
-  if (q) list = list.filter(s => JSON.stringify([s.parts, s.notes]).toLowerCase().includes(q));
-  const el = $('#historyList');
-  if (!list.length) { el.innerHTML = sessions.length ? `<div class="empty"><b>No matches</b>Try another search.</div>` : `<div class="empty"><b>No sessions yet</b>Log your first WOD on the Log tab.</div>`; return; }
-  let html = '', month = '';
-  for (const s of list) {
-    const mo = parseDate(s.date).toLocaleDateString('en-GB', { month:'long', year:'numeric' });
-    if (mo !== month) { month = mo; html += `<div class="month">${mo}</div>`; }
-    const open = openIds.has(s.id);
-    const parts = s.parts.map(p => {
-      if (p.kind === 'strength' && p.ex[0]) return `<div class="ph"><div><h3>${esc(p.ex[0].name)}</h3><div class="sub">${esc(schemeStr(p.ex[0]))}</div></div></div>`;
-      const sc = scoreStr(p);
-      return `<div class="ph"><div>${p.name ? `<h3>${esc(p.name)}</h3><div class="sub">${esc(fmtLabel(p))} · ${p.rx ? 'Rx' : 'Scaled'}</div>` : `<h3>${esc(fmtLabel(p))}</h3><div class="sub">${p.rx ? 'Rx' : 'Scaled'}</div>`}</div>${sc ? `<div class="score">${esc(sc)}</div>` : ''}</div>
-        ${p.ex.map(x => `<div class="exline"><b>${esc(x.name)}</b> · ${esc(schemeStr(x))}</div>`).join('')}
-        ${open && p.notes ? `<div class="details">${esc(p.notes)}</div>` : ''}`;
-    }).join('');
-    const tags = [`<span class="tag">RPE ${s.rpe || '–'}</span>`].concat((idx.flags[s.id] || []).map(f => `<span class="tag pr">🏆 ${esc(f)}</span>`));
-    html += `<div class="entry" data-id="${esc(s.id)}"><div class="date">${fmtDate(s.date)}${s.name ? ' · ' + esc(s.name) : ''}</div>${parts}<div>${tags.join('')}</div>
-      ${open ? `${s.notes ? `<div class="details">📝 ${esc(s.notes)}</div>` : ''}
-        <div class="actions"><button class="edit">Edit</button><button class="dup">Repeat</button><button class="del ${sureDel.has(s.id) ? 'sure' : ''}">${sureDel.has(s.id) ? 'Confirm' : 'Delete'}</button></div>` : ''}</div>`;
-  }
-  el.innerHTML = html;
-}
-$('#historyList').addEventListener('click', async e => {
-  const card = e.target.closest('.entry'); if (!card) return;
-  const id = card.dataset.id, s = sessions.find(x => x.id === id);
-  if (e.target.closest('.edit') && s) { draft = clone({ date:s.date, name:s.name || '', parts:normParts(clone(s.parts)), rpe:s.rpe || 7, notes:s.notes || '' }); draft.parts.forEach(p => { if (p.kind === 'strength') p.ex[0].sets.forEach(x => x.done = true); }); editingId = id; renderLog(); showView('log'); window.scrollTo(0, 0); return; }
-  if (e.target.closest('.dup') && s) {
-    draft = clone({ date:todayStr(), name:'', parts:normParts(clone(s.parts)).map(p => ({ ...p, score:{}, notes:'' })), rpe:7, notes:'' }); draft.parts.forEach(p => { if (p.kind === 'strength') p.ex[0].sets.forEach(x => x.done = false); }); editingId = null;
-    renderLog(); showView('log'); window.scrollTo(0, 0); toast('Copied — adjust and save'); stashDraft(); return;
-  }
-  if (e.target.closest('.del')) {
-    if (!sureDel.has(id)) { sureDel.add(id); renderHistory(); setTimeout(() => { sureDel.delete(id); renderHistory(); }, 3000); return; }
-    sureDel.delete(id); openIds.delete(id);
-    try { await Store.remove(id); toast('Session deleted'); } catch (err) { toast("Couldn't delete — try again"); }
-    return;
-  }
-  openIds.has(id) ? openIds.delete(id) : openIds.add(id);
-  renderHistory();
-});
-$('#hSearch').addEventListener('input', renderHistory);
 
 // ================= EXERCISES =================
 let exSel = null, exMetric = 'weight', exQ = '';
@@ -1318,7 +1384,7 @@ function renderCustom() {
   const c = settings.custom || [];
   $('#customList').innerHTML = c.length ? c.map((x, i) => `<div class="lrow"><span>${esc(x.name)} <span class="small">· ${(EQ[x.equip] || EQ.other).label}</span></span><button class="linkbtn" data-rmc="${i}" style="color:var(--bad)">Remove</button></div>`).join('') : `<div class="small">None yet — type a new name when adding an exercise.</div>`;
 }
-function renderAll() { computeIndex(); renderHistory(); renderExercises(); renderProgress(); renderCustom(); }
+function renderAll() { computeIndex(); if (logMode === 'list') { if ($('#listBody') && !!$('#lSearch') === !!sessions.length) renderListBody(); else renderLog(); } renderExercises(); renderProgress(); renderCustom(); }
 
 function showView(v) {
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
@@ -1362,9 +1428,9 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => navigato
 
 
 // boot
-draft = newDraft();
-try { const raw = localStorage.getItem('wodlog.draft'); if (raw) { const o = JSON.parse(raw); if (o && o.draft && o.draft.parts) { draft = o.draft; draft.name = draft.name || ''; draft.parts = normParts(draft.parts); editingId = o.editingId || null; } } } catch (e) {}
-renderLog(); renderAll();
+draft = null;
+try { const raw = localStorage.getItem('wodlog.draft'); if (raw) { const o = JSON.parse(raw); if (o && o.draft && o.draft.parts) { draft = o.draft; draft.name = draft.name || ''; draft.parts = normParts(draft.parts); draft.id = draft.id || o.editingId || uid(); editingId = draft.id; logMode = 'session'; } } } catch (e) {}
+renderAll(); renderLog();
 try { const v = localStorage.getItem('wodlog.view'); if (v && $('#v-' + v)) showView(v); } catch (e) {}
 Store.ready = Store.init();
 })();
