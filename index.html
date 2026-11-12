@@ -364,6 +364,37 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .wpick{display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;font-size:20px;font-weight:700}
 .wpick i{font-style:normal;color:var(--muted);font-size:22px}
 .wpick.empty span{color:var(--accent);font-size:16px}
+#csheet{align-items:center;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+#csheet .wsheet{border-radius:20px;padding:14px;max-height:100%;overflow-y:auto}
+#csheet .keypad button{padding:12px 0}
+#csheet .chip{padding:5px 12px;font-size:13px}
+.csbig{display:block;font-size:44px;font-weight:800;line-height:1.1;word-break:break-all}
+.repsval small{display:block}
+.ladrow{display:grid;grid-template-columns:1fr 44px 1fr 44px;gap:8px;align-items:center;margin:14px 0 4px}
+.ladrow .ladbox:nth-child(1){grid-column:1}.ladrow .pm.sm{width:44px;height:44px;flex-basis:44px;font-size:24px}
+.ladbox{background:var(--card2);border:1.5px solid var(--line);border-radius:12px;padding:8px 10px;text-align:center}
+.ladbox small{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.ladbox b{font-size:28px;font-weight:800}
+.ladbox.on{border-color:var(--accent)}
+.ladrow{grid-template-columns:1fr 1fr;grid-template-areas:"a b" "m p"}
+.ladrow [data-ct=start]{grid-area:a}.ladrow [data-ct=step]{grid-area:b}.ladrow [data-cd="-1"]{grid-area:m;justify-self:end}.ladrow [data-cd="1"]{grid-area:p;justify-self:start}
+.cprev{text-align:center;font-size:13px;color:var(--muted);margin:4px 0}
+.cph{color:var(--accent);font-weight:600;font-size:14px}
+.crow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.crow .stepper{width:116px;flex:0 0 116px}
+.clab{font-size:13px;color:var(--muted);font-weight:600;width:96px;flex:0 0 96px;white-space:nowrap}
+.cplus{color:var(--muted)}
+.cmini{width:64px!important;text-align:center}
+.emomr{font-size:14px;margin-left:auto;white-space:nowrap}
+.cfmt{margin-top:8px}
+.clabel{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:12px 0 2px}
+.cex{display:grid;grid-template-columns:1fr 84px 76px;gap:6px;align-items:center}
+.cex.chd{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.cex.chd span:not(:first-child){text-align:center}
+.cname{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crep,.cw{height:34px;background:var(--card2);border:1px solid var(--line);border-radius:10px;font-weight:700;font-size:15px}
+.crep small{font-size:11px;color:var(--muted)}
+#sessBody .part .crow input:not([type=checkbox]){padding:7px 4px}
 </style>
 </head>
 <body>
@@ -426,11 +457,21 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
     <div id="vsList"></div>
   </div>
 </div>
+<div class="sheet-bg" id="csheet">
+  <div class="sheet wsheet">
+    <div class="between"><b id="csTitle" class="wstitle"></b><button id="csClose" class="linkbtn" style="font-size:22px;padding:0 4px" aria-label="Close">✕</button></div>
+    <div class="seg" id="csMode" style="margin-top:10px"><button data-cm="same">Same each round</button><button data-cm="ladder">Ladder</button><button data-cm="list">Custom</button></div>
+    <div class="chips" id="csUnits" style="margin-top:8px;justify-content:center"></div>
+    <div id="csBody"></div>
+    <div class="keypad" id="csKeys"></div>
+    <button class="btn" id="csOk" style="margin-top:12px">Set reps</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -723,23 +764,51 @@ function strengthHTML(p, i) {
     <div class="addrow"><button class="addSet">+ Add set</button></div>
   </div>`;
 }
+// ---- conditioning card: minutes → AMRAP / EMOM / For Time → rounds → exercises ----
+const COND_FORMATS = [['amrap', 'AMRAP'], ['emom', 'EMOM'], ['time', 'For Time']];
+function syncRounds(p) {
+  const s = p.score || (p.score = {});
+  if (p.format === 'amrap') p.rounds = Math.max(1, parseInt(s.rounds) || 1);
+  else if (p.format === 'emom') p.rounds = p.cap && p.every ? Math.max(1, Math.floor(p.cap / p.every)) : Math.max(1, p.rounds || 1);
+  else p.rounds = Math.max(1, p.rounds || 1);
+  p.ex.forEach(x => { if (x.linked) { x.count = p.rounds; regen(x); } });
+}
+function cRepsTxt(x) {
+  const rs = (x.sets || []).map(s => s.r);
+  if (!rs.length || !rs.some(r => r > 0)) return '<span class="cph">Reps</span>';
+  const u = x.unit === 'reps' ? '' : `<small> ${x.unit}</small>`;
+  if (rs.every(r => r === rs[0])) return `${rs[0]}${u}`;
+  if (x.mode === 'ladder' && rs.length > 2) return `${rs[0]}→${rs[rs.length - 1]}${u}`;
+  return `${rs.join('-')}${u}`;
+}
+function cWTxt(x) {
+  const E = EQ[x.equip] || EQ.other; if (E.noWeight) return '';
+  const ws = (x.sets || []).map(s => s.w || 0), nz = ws.filter(Boolean);
+  const pre = IMPL[x.equip] && IMPL[x.equip].dual && x.impl === 2 ? '2×' : '';
+  if (!nz.length) return E.optional ? '<span class="bwl dim">BW</span>' : x.wset && x.equip === 'barbell' ? '<span class="bwl">BW</span>' : '<span class="cph">+ kg</span>';
+  const mn = Math.min(...nz), mx = Math.max(...nz);
+  return mn === mx ? `${pre}${num(mx)}` : `${pre}${num(mn)}–${num(mx)}`;
+}
 function exRows(p) {
-  if (!p.ex.length) return `<div class="small" style="margin-top:8px">No exercises yet.</div>`;
-  return p.ex.map((x, j) => swWrap('ex', `data-j="${j}"`, `<button class="exrow" data-j="${j}"><div><b>${esc(x.name)}</b><span class="small">${esc(schemeStr(x))}</span></div><span class="chev">›</span></button>`)).join('');
+  if (!p.ex.length) return `<div class="small" style="margin:6px 0 2px">No exercises yet — add what you do each round.</div>`;
+  return `<div class="cex chd"><span>Exercise</span><span>Per round</span><span>kg</span></div>` + p.ex.map((x, j) => swWrap('ex', `data-j="${j}"`,
+    `<div class="cex" data-j="${j}"><span class="cname">${esc(x.name)}</span><button class="crep">${cRepsTxt(x)}</button>${(EQ[x.equip] || EQ.other).noWeight ? '<span></span>' : `<button class="cw">${cWTxt(x)}</button>`}</div>`)).join('');
 }
 function condHTML(p, i) {
-  const F = FORMATS[p.format] || FORMATS.time;
+  if (!COND_FORMATS.some(f => f[0] === p.format)) p.format = 'time';
+  const s = p.score || (p.score = {});
+  let fmt = '';
+  if (p.format === 'amrap') fmt = `<div class="crow"><span class="clab">Rounds done</span>${stepper('data-f="sc.rounds"', s.rounds ?? '', '0')}<span class="cplus">+</span><input class="cmini" data-f="sc.reps" inputmode="numeric" placeholder="reps" value="${s.reps || ''}"></div>`;
+  else if (p.format === 'emom') fmt = `<div class="crow"><span class="clab">Every</span>${stepper('data-f="every"', p.every || 1)}<span class="cplus">min</span><b class="emomr">${p.cap ? `= ${p.rounds} round${p.rounds > 1 ? 's' : ''}` : ''}</b></div>`;
+  else fmt = `<div class="crow"><span class="clab">Rounds</span>${stepper('data-f="rounds"', p.rounds)}</div>
+    <div class="crow"><span class="clab">Your time</span><input class="cmini" data-f="sc.min" inputmode="numeric" placeholder="min" value="${s.timeSec ? Math.floor(s.timeSec / 60) : ''}"><span class="cplus">:</span><input class="cmini" data-f="sc.sec" inputmode="numeric" placeholder="sec" value="${s.timeSec ? String(Math.round(s.timeSec % 60)).padStart(2, '0') : ''}"></div>`;
   return `<div class="card part cblock" data-p="${i}">
     <div class="between"><span class="plabel">Conditioning</span><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
-    <input class="titlein" data-f="name" placeholder="${esc(F.label)} WOD" value="${esc(p.name)}">
-    <div class="chips" style="margin-top:8px">${Object.entries(FORMATS).filter(([k]) => k !== 'strength').map(([k, f]) => `<button class="chip fmt ${k === p.format ? 'on' : ''}" data-fmt="${k}">${f.label}</button>`).join('')}</div>
-    <div class="${F.extra ? 'grid2' : ''}" style="margin-top:4px">
-      <div><label class="l">${F.count}</label>${stepper('data-f="rounds"', p.rounds)}</div>
-      ${F.extra ? `<div><label class="l">${F.extra.label}</label>${stepper(`data-f="${F.extra.k}"`, p[F.extra.k] ?? '', F.extra.k === 'cap' ? '—' : '')}</div>` : ''}
-    </div>
-    <label class="l">Score</label>${scoreHTML(p)}
-    <div class="seg rxSeg" style="margin-top:10px"><button data-rx="1" class="${p.rx ? 'on' : ''}">Rx</button><button data-rx="0" class="${!p.rx ? 'on' : ''}">Scaled</button></div>
-    <label class="l">Exercises</label>
+    <input class="titlein" data-f="name" placeholder="${esc(fmtLabel(p))}" value="${esc(p.name)}">
+    <div class="crow"><span class="clab">Minutes</span>${stepper('data-f="cap"', p.cap ?? '', '—')}</div>
+    <div class="seg cfmt">${COND_FORMATS.map(([k, l]) => `<button class="fmt ${k === p.format ? 'on' : ''}" data-fmt="${k}">${l}</button>`).join('')}</div>
+    ${fmt}
+    <div class="clabel">Each round</div>
     <div class="exlist">${exRows(p)}</div>
     <div class="addrow"><button class="addEx">+ Add exercise</button></div>
   </div>`;
@@ -885,9 +954,16 @@ document.addEventListener('click', e => { if (swBlock && !e.target.closest('.sw-
 
 function setPartField(p, f, t, card) {
   if (f === 'name') { p.name = t.value; $('#sTitle').placeholder = autoTitle(draft); }
-  else if (f === 'rounds') { p.rounds = clampInt(t.value, 1, 100); p.ex.forEach(x => { if (x.linked) { x.count = p.rounds; regen(x); } }); card.querySelector('.exlist').innerHTML = exRows(p); }
-  else if (f === 'cap') p.cap = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0);
-  else if (f === 'every') p.every = clampInt(t.value, 1, 30);
+  else if (f === 'rounds' || f === 'cap' || f === 'every' || f === 'sc.rounds') {
+    if (f === 'rounds') p.rounds = clampInt(t.value, 1, 100);
+    else if (f === 'cap') p.cap = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0);
+    else if (f === 'every') p.every = clampInt(t.value, 1, 30);
+    else p.score.rounds = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0);
+    syncRounds(p);
+    card.querySelector('.exlist').innerHTML = exRows(p);
+    const er = card.querySelector('.emomr'); if (er) er.textContent = p.cap ? `= ${p.rounds} round${p.rounds > 1 ? 's' : ''}` : '';
+    const ti = card.querySelector('.titlein'); if (ti) ti.placeholder = fmtLabel(p);
+  }
   else if (f === 'sc.min' || f === 'sc.sec') {
     const m = parseFloat(card.querySelector('[data-f="sc.min"]').value) || 0, s = parseFloat(card.querySelector('[data-f="sc.sec"]').value) || 0;
     p.score.timeSec = m * 60 + s || 0;
@@ -944,7 +1020,7 @@ logEl.addEventListener('click', async e => {
   if (t.closest('#closeBtn')) return closeSession('down');
   if (t.closest('#closeTop')) return closeSession('right');
   if (t.closest('#addStrength')) return openStrengthPicker();
-  if (t.closest('#addCond')) { draft.parts.push({ ...newPart(), kind:'conditioning' }); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return; }
+  if (t.closest('#addCond')) { draft.parts.push({ ...newPart(), format:'amrap', every:1, kind:'conditioning' }); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return; }
   const card = t.closest('.part'); if (!card) return;
   const pi = +card.dataset.p, p = draft.parts[pi];
   if (t.closest('.rmPart')) {
@@ -974,18 +1050,21 @@ logEl.addEventListener('click', async e => {
   const stp = t.closest('[data-stp]');
   if (stp) {
     const inp = stp.parentElement.querySelector('input');
-    const f = inp.dataset.f, lo = f === 'cap' ? 0 : 1;
+    const f = inp.dataset.f, lo = f === 'cap' || f === 'sc.rounds' ? 0 : 1;
     inp.value = Math.max(lo, (parseInt(inp.value) || 0) + +stp.dataset.stp);
     setPartField(p, f, inp, card); return;
   }
   if (t.closest('.fmt')) {
     const f = t.closest('.fmt').dataset.fmt; p.format = f; p.score = {};
     if (f === 'emom' && !p.every) p.every = 1;
+    syncRounds(p);
     rerenderPart(pi); stashDraft(); return;
   }
-  if (t.closest('.rxSeg button')) { p.rx = t.closest('button').dataset.rx === '1'; card.querySelectorAll('.rxSeg button').forEach(b => b.classList.toggle('on', (b.dataset.rx === '1') === p.rx)); stashDraft(); return; }
-  if (t.closest('.addEx')) return openEditor(pi, null);
-  const er = t.closest('.exrow'); if (er) return openEditor(pi, +er.dataset.j);
+  if (false) { p.rx = t.closest('button').dataset.rx === '1'; card.querySelectorAll('.rxSeg button').forEach(b => b.classList.toggle('on', (b.dataset.rx === '1') === p.rx)); stashDraft(); return; }
+  if (t.closest('.addEx')) return openPicker('cond', pi);
+  const cx = t.closest('.cex[data-j]');
+  if (cx && t.closest('.crep')) return openCondReps(pi, +cx.dataset.j);
+  if (cx && t.closest('.cw')) return openCondWeight(pi, +cx.dataset.j);
 });
 
 // ================= VERSION PICKER (scaled progressions) =================
@@ -1008,6 +1087,84 @@ $('#vsheet').addEventListener('click', e => {
   closeVS(); rerenderPart(pi); stashDraft();
   if (!x.sets[k].r) openReps(pi, k);
 });
+
+// ================= CONDITIONING REPS POPUP =================
+let csh = null;
+function openCondReps(pi, j) {
+  const p = draft.parts[pi], x = p.ex[j];
+  csh = { pi, j, mode: x.mode || 'same', val: +x.reps || (x.sets[0] && x.sets[0].r) || 0, start: +x.start || 0, step: x.step === '' || x.step == null ? 1 : +x.step,
+          list: x.list || '', unit: x.unit || 'reps', target: 'start', fresh: true };
+  $('#csTitle').textContent = x.name;
+  $('#csheet').classList.add('on'); document.body.style.overflow = 'hidden';
+  renderCS();
+}
+function closeCS() { csh = null; $('#csheet').classList.remove('on'); document.body.style.overflow = ''; }
+function renderCS() {
+  const p = draft.parts[csh.pi], n = p.rounds;
+  $$('#csMode button').forEach(b => b.classList.toggle('on', b.dataset.cm === csh.mode));
+  $('#csUnits').innerHTML = UNITS.map(u => `<button class="chip ${csh.unit === u ? 'on' : ''}" data-cu="${u}">${u}</button>`).join('');
+  let h = '';
+  if (csh.mode === 'same') h = `<div class="repsrow"><button class="pm" data-cd="-1">−</button><div class="repsval"><span class="csbig">${csh.val}</span><small>${csh.unit} each round · ${n} round${n > 1 ? 's' : ''}</small></div><button class="pm" data-cd="1">+</button></div>`;
+  else if (csh.mode === 'ladder') {
+    const prev = Array.from({ length: n }, (_, i) => Math.max(0, r2(csh.start + i * csh.step))).join('-');
+    h = `<div class="ladrow"><button class="ladbox ${csh.target === 'start' ? 'on' : ''}" data-ct="start"><small>Round 1</small><b>${csh.start}</b></button>
+      <button class="pm sm" data-cd="-1">−</button><button class="ladbox ${csh.target === 'step' ? 'on' : ''}" data-ct="step"><small>Add each round</small><b>${csh.step > 0 ? '+' : ''}${csh.step}</b></button><button class="pm sm" data-cd="1">+</button></div>
+      <div class="cprev">${n} rounds: ${prev}</div>`;
+  } else {
+    const L = parseList(csh.list);
+    h = `<div class="repsval" style="margin:12px 0 4px"><span class="csbig">${esc(csh.list) || '<span class="cph">e.g. 21-15-9</span>'}</span><small>${L.length ? L.length + ' rounds' : 'type the reps for each round, separated by –'}</small></div>`;
+  }
+  $('#csBody').innerHTML = h;
+  $('#csKeys').innerHTML = (csh.mode === 'list' ? ['1','2','3','4','5','6','7','8','9','–','0','⌫'] : ['1','2','3','4','5','6','7','8','9','C','0','⌫']).map(k => `<button data-ck="${k}">${k}</button>`).join('');
+}
+$('#csheet').addEventListener('click', e => {
+  const t = e.target; if (!csh) return;
+  if (t.id === 'csheet' || t.closest('#csClose')) return closeCS();
+  const m = t.closest('[data-cm]'); if (m) { csh.mode = m.dataset.cm; csh.fresh = true; if (csh.mode === 'ladder' && !csh.start) csh.start = csh.val || 0; renderCS(); return; }
+  const u = t.closest('[data-cu]'); if (u) { csh.unit = u.dataset.cu; renderCS(); return; }
+  const tg = t.closest('[data-ct]'); if (tg) { csh.target = tg.dataset.ct; csh.fresh = true; renderCS(); return; }
+  const d = t.closest('[data-cd]');
+  if (d) {
+    const dv = +d.dataset.cd;
+    if (csh.mode === 'same') csh.val = Math.max(0, csh.val + dv);
+    else if (csh.target === 'start') csh.start = Math.max(0, csh.start + dv); else csh.step = csh.step + dv;
+    csh.fresh = false; renderCS(); return;
+  }
+  const kb = t.closest('[data-ck]');
+  if (kb) {
+    const k = kb.dataset.ck;
+    if (csh.mode === 'list') {
+      if (k === '⌫') csh.list = csh.list.slice(0, -1);
+      else if (k === '–') { if (csh.list && !csh.list.endsWith('-')) csh.list += '-'; }
+      else if (csh.list.length < 40) csh.list += k;
+    } else {
+      const key = csh.mode === 'same' ? 'val' : csh.target;
+      let v = Math.abs(csh[key]), neg = key === 'step' && csh[key] < 0;
+      if (k === 'C') v = 0; else if (k === '⌫') v = Math.floor(v / 10); else v = csh.fresh ? +k : Math.min(9999, v * 10 + +k);
+      csh[key] = neg ? -v : v;
+    }
+    csh.fresh = false; renderCS(); return;
+  }
+  if (t.closest('#csOk')) {
+    const { pi, j } = csh, p = draft.parts[pi], x = p.ex[j];
+    x.unit = csh.unit; x.mode = csh.mode;
+    if (csh.mode === 'same') { x.reps = csh.val; x.count = p.rounds; x.linked = true; }
+    else if (csh.mode === 'ladder') { x.start = csh.start; x.step = csh.step; x.count = p.rounds; x.linked = true; }
+    else {
+      x.list = csh.list.replace(/-+$/, ''); x.linked = false;
+      const n = parseList(x.list).length;
+      if (p.format === 'time' && n > p.rounds) { p.rounds = n; syncRounds(p); }
+    }
+    regen(x); closeCS(); rerenderPart(pi); stashDraft();
+    const E = EQ[x.equip] || EQ.other;
+    if (!E.noWeight && !E.optional && !x.wset && !x.sets.some(s => s.w > 0)) openCondWeight(pi, j);  // straight on to weight
+  }
+});
+function openCondWeight(pi, j) {
+  const x = draft.parts[pi].ex[j], ws = x.sets.map(s => s.w || 0).filter(Boolean);
+  const w0 = ws.length ? Math.max(...ws) : x.equip === 'barbell' && !x.wset ? (x.bar ?? 20) : 0;
+  openWeightFor(x, w0, `${x.name} · every round`, v => { x.sets.forEach(s => s.w = v); x.wset = true; rerenderPart(pi); stashDraft(); });
+}
 
 // ================= REPS PAD (strength sets) =================
 let rsh = null;
@@ -1301,8 +1458,9 @@ function openEditor(pi, j) {
   renderEditor();
   if (ed.view === 'pick') setTimeout(() => { const s = $('#exSearch'); if (s) s.focus(); }, 50);
 }
-function openStrengthPicker() {
-  ed = { mode:'strength', view:'pick', d:null, sel:'all', q:'' };
+function openStrengthPicker() { openPicker('strength'); }
+function openPicker(mode, pi) {
+  ed = { mode, pi, view:'pick', d:null, sel:'all', q:'' };
   $('#ed').classList.add('on', 'modal'); document.body.style.overflow = 'hidden';
   renderEditor();
   setTimeout(() => { const s = $('#exSearch'); if (s) s.focus(); }, 50);
@@ -1315,7 +1473,7 @@ function renderEditor() {
   $('#edRemove').classList.toggle('hidden', !(ed.view === 'edit' && ed.j != null));
   $('#edFoot').classList.toggle('hidden', ed.view === 'pick');
   if (ed.view === 'pick') {
-    $('#edTitle').textContent = ed.mode === 'strength' ? 'Strength / Skill' : ed.d ? 'Change exercise' : 'Add exercise';
+    $('#edTitle').textContent = ed.mode === 'strength' ? 'Strength / Skill' : ed.mode === 'cond' ? 'Add exercise' : ed.d ? 'Change exercise' : 'Add exercise';
     body.innerHTML = `<input id="exSearch" placeholder="Search or type a new exercise" value="${esc(ed.q)}" autocomplete="off" style="margin-top:12px"><div id="pickList"></div>`;
     renderPickList();
   } else {
@@ -1371,6 +1529,14 @@ function choose(item) {
   if (ed.mode === 'strength') {
     draft.parts.push(strengthPart(item.name, item.equip, item.unit || 'reps', [0, 1, 2].map(() => ({ r:0, w:null, done:false }))));
     closeEditor(); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return;
+  }
+  if (ed.mode === 'cond') {
+    const pi = ed.pi, p = draft.parts[pi];
+    const x = { name:item.name, equip:item.equip, unit:item.unit || 'reps', impl:1, mode:'same', reps:'', count:p.rounds, start:'', step:1, list:'', sets:[], linked:true };
+    regen(x); p.ex.push(x);
+    closeEditor(); rerenderPart(pi); stashDraft();
+    openCondReps(pi, p.ex.length - 1);  // straight on to reps
+    return;
   }
   const p = draft.parts[ed.pi];
   if (ed.d) {  // changing exercise on an existing entry: keep the scheme
@@ -1487,7 +1653,7 @@ edEl.addEventListener('input', e => {
 });
 edEl.addEventListener('click', async e => {
   const t = e.target; if (!ed) return;
-  if (ed.mode === 'strength' && t.id === 'ed') { closeEditor(); return; }
+  if ((ed.mode === 'strength' || ed.mode === 'cond') && t.id === 'ed') { closeEditor(); return; }
   if (t.closest('#edCancel')) { if (ed.view === 'pick' && ed.d) { ed.view = 'edit'; renderEditor(); } else closeEditor(); return; }
   const cat = t.closest('[data-cat]');
   if (cat) { ed.open = ed.open || new Set(); const k = cat.dataset.cat; ed.open.has(k) ? ed.open.delete(k) : ed.open.add(k); renderPickList(); return; }
