@@ -427,7 +427,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -528,7 +528,7 @@ function scoreVal(p) {
 }
 // exercises logged by version (scaling) instead of weight — easiest first
 const VERSIONS = {
-  'candlestick': [['Tucked', 'Both legs tucked'], ['One leg', 'One leg tucked, one straight'], ['Straddle', 'Legs straddled'], ['Full', 'Full — legs straight'], ['To stand', 'Full, roll up to stand']]
+  'candlestick': [['Tucked', 'Both legs tucked'], ['One leg', 'One leg tucked, one straight'], ['Straddle', 'Legs straddled'], ['Full', 'Full — legs straight']]
 };
 const versionsOf = x => VERSIONS[norm(x.name)] || null;
 function effV(x, k) { for (let j = k; j >= 0; j--) if (x.sets[j].v) return x.sets[j].v; return null; }
