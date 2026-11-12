@@ -409,6 +409,12 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .rnd .crep,.rnd .cw{background:var(--card)}
 .rndh{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
 .rndadd{display:block;margin:6px auto 0;color:var(--accent);font-weight:700;font-size:13px;padding:4px 10px}
+.ladboxes{display:flex;gap:8px;margin:12px 0 0}
+.ladboxes .ladbox{flex:1}
+.ladpm{display:flex;justify-content:center;gap:18px;margin:8px 0 2px}
+.ladpm .pm.sm{width:46px;height:46px;flex:0 0 46px;font-size:24px}
+.cwarn{color:var(--accent2)}
+#csMode button{font-size:13px;padding:8px 2px}
 </style>
 </head>
 <body>
@@ -474,7 +480,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="sheet-bg" id="csheet">
   <div class="sheet wsheet">
     <div class="between"><b id="csTitle" class="wstitle"></b><button id="csClose" class="linkbtn" style="font-size:22px;padding:0 4px" aria-label="Close">✕</button></div>
-    <div class="seg" id="csMode" style="margin-top:10px"><button data-cm="same">Same each round</button><button data-cm="ladder">Ladder</button><button data-cm="list">Custom</button></div>
+    <div class="seg" id="csMode" style="margin-top:10px"><button data-cm="same">Same</button><button data-cm="ladder">Ladder</button><button data-cm="updown">Up &amp; down</button><button data-cm="list">Custom</button></div>
     <div class="chips" id="csUnits" style="margin-top:8px;justify-content:center"></div>
     <div id="csBody"></div>
     <div class="keypad" id="csKeys"></div>
@@ -485,7 +491,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -609,10 +615,19 @@ function exTotals(x) {
   const mw = Math.max(0, ...x.sets.map(s => s.w || 0));
   return { reps, ton, mw };
 }
+// up & down: start → peak in steps, then back down to start, e.g. 2-4-6-8-6-4-2
+function upDown(start, step, peak) {
+  start = +start || 0; step = Math.abs(+step || 0); peak = +peak || 0;
+  if (!step || peak <= start) return [start];
+  const up = []; for (let v = start; v < peak - 1e-9; v = r2(v + step)) up.push(v);
+  up.push(peak);
+  return up.concat(up.slice(0, -1).reverse());
+}
 function regen(d) {
   const old = d.sets || [];
   let reps;
   if (d.mode === 'list') reps = parseList(d.list);
+  else if (d.mode === 'updown') reps = upDown(d.start, d.step, d.peak);
   else {
     const n = clampInt(d.count, 1, 100);
     reps = Array.from({ length:n }, (_, i) => d.mode === 'ladder' ? Math.max(0, r2((+d.start || 0) + i * (+d.step || 0))) : (+d.reps || 0));
@@ -820,6 +835,7 @@ function cRepsTxt(x) {
   const u = x.unit === 'reps' ? '' : `<small> ${x.unit}</small>`;
   if (rs.every(r => r === rs[0])) return `${rs[0]}${u}`;
   if (x.mode === 'ladder' && rs.length > 2) return `${rs[0]}→${rs[rs.length - 1]}${u}`;
+  if (x.mode === 'updown' && rs.length > 2) return `${rs[0]}↗${Math.max(...rs)}↘${rs[rs.length - 1]}${u}`;
   return `${rs.join('-')}${u}`;
 }
 function cWTxt(x) {
@@ -859,7 +875,7 @@ function condHTML(p, i) {
     <div class="crow"><span class="clab">Minutes</span>${stepper('data-f="cap"', p.cap ?? '', '—')}</div>
     <div class="crow"><span class="clab">Type</span><div class="seg cfmt">${COND_FORMATS.map(([k, l]) => `<button class="fmt ${k === p.format ? 'on' : ''}" data-fmt="${k}">${l}</button>`).join('')}</div></div>
     <div class="cfmtarea">${fmtRows(p)}</div>
-    <div class="between rndbar"><span class="clabel">${p.rounds} round${p.rounds > 1 ? 's' : ''}</span><label class="check samechk"><input type="checkbox" data-f="same" ${p.same !== false ? 'checked' : ''}> Same every round</label></div>
+    <div class="between rndbar"><span class="clabel">${p.rounds} round${p.rounds > 1 ? 's' : ''}</span><label class="check samechk"><input type="checkbox" data-f="same" ${p.same !== false ? 'checked' : ''}> Same exercises every round</label></div>
     <div class="exlist">${exRows(p)}</div>
   </div>`;
 }
@@ -1169,7 +1185,10 @@ let csh = null;
 function openCondReps(pi, j) {
   const p = draft.parts[pi], x = p.ex[j];
   csh = { pi, j, mode: x.mode || 'same', val: +x.reps || (x.sets[0] && x.sets[0].r) || 0, start: +x.start || 0, step: x.step === '' || x.step == null ? 1 : +x.step,
-          list: x.list || '', unit: x.unit || 'reps', target: 'start', fresh: true };
+          peak: +x.peak || 0, list: x.list || '', unit: x.unit || 'reps', target: 'start', fresh: true };
+  // a new exercise follows the previous one's pattern (so "everything ladders together" is quick)
+  if (!x.sets.some(s => s.r > 0) && j > 0 && ['ladder', 'updown'].includes(p.ex[j - 1].mode)) csh.mode = p.ex[j - 1].mode;
+  if (csh.mode === 'updown' && csh.step < 0) csh.step = -csh.step;
   const us = unitsFor(x); if (!us.includes(csh.unit)) csh.unit = us[0];
   $('#csTitle').textContent = x.name;
   $('#csheet').classList.add('on'); document.body.style.overflow = 'hidden';
@@ -1184,11 +1203,12 @@ function renderCS() {
   $('#csUnits').classList.toggle('hidden', us.length < 2);
   let h = '';
   if (csh.mode === 'same') h = `<div class="repsrow"><button class="pm" data-cd="-1">−</button><div class="repsval"><span class="csbig">${csh.val}</span><small>${csh.unit} each round · ${n} round${n > 1 ? 's' : ''}</small></div><button class="pm" data-cd="1">+</button></div>`;
-  else if (csh.mode === 'ladder') {
-    const prev = Array.from({ length: n }, (_, i) => Math.max(0, r2(csh.start + i * csh.step))).join('-');
-    h = `<div class="ladrow"><button class="ladbox ${csh.target === 'start' ? 'on' : ''}" data-ct="start"><small>Round 1</small><b>${csh.start}</b></button>
-      <button class="pm sm" data-cd="-1">−</button><button class="ladbox ${csh.target === 'step' ? 'on' : ''}" data-ct="step"><small>Add each round</small><b>${csh.step > 0 ? '+' : ''}${csh.step}</b></button><button class="pm sm" data-cd="1">+</button></div>
-      <div class="cprev">${n} rounds: ${prev}</div>`;
+  else if (csh.mode === 'ladder' || csh.mode === 'updown') {
+    const box = (k, lab, val) => `<button class="ladbox ${csh.target === k ? 'on' : ''}" data-ct="${k}"><small>${lab}</small><b>${val}</b></button>`;
+    const seq = csh.mode === 'ladder' ? Array.from({ length: n }, (_, i) => Math.max(0, r2(csh.start + i * csh.step))) : upDown(csh.start, csh.step, csh.peak);
+    h = `<div class="ladboxes">${box('start', 'Start', csh.start)}${box('step', csh.mode === 'ladder' ? 'Each round' : 'Step', `${csh.mode === 'ladder' && csh.step > 0 ? '+' : ''}${csh.step}`)}${csh.mode === 'updown' ? box('peak', 'Peak', csh.peak) : ''}</div>
+      <div class="ladpm"><button class="pm sm" data-cd="-1">−</button><button class="pm sm" data-cd="1">+</button></div>
+      <div class="cprev">${seq.length} rounds: ${seq.join('-')}${csh.mode === 'updown' && p.format !== 'time' && seq.length !== n ? ` <span class="cwarn">(card has ${n})</span>` : ''}</div>`;
   } else {
     const L = parseList(csh.list);
     h = `<div class="repsval" style="margin:12px 0 4px"><span class="csbig">${esc(csh.list) || '<span class="cph">e.g. 21-15-9</span>'}</span><small>${L.length ? L.length + ' rounds' : 'type the reps for each round, separated by –'}</small></div>`;
@@ -1199,14 +1219,22 @@ function renderCS() {
 $('#csheet').addEventListener('click', e => {
   const t = e.target; if (!csh) return;
   if (t.id === 'csheet' || t.closest('#csClose')) return closeCS();
-  const m = t.closest('[data-cm]'); if (m) { csh.mode = m.dataset.cm; csh.fresh = true; if (csh.mode === 'ladder' && !csh.start) csh.start = csh.val || 0; renderCS(); return; }
+  const m = t.closest('[data-cm]');
+  if (m) {
+    csh.mode = m.dataset.cm; csh.fresh = true; csh.target = 'start';
+    if ((csh.mode === 'ladder' || csh.mode === 'updown') && !csh.start) csh.start = csh.val || 0;
+    if (csh.mode === 'updown') { if (csh.step <= 0) csh.step = 1; if (csh.peak <= csh.start) csh.peak = csh.start + csh.step * 3; }
+    renderCS(); return;
+  }
   const u = t.closest('[data-cu]'); if (u) { csh.unit = u.dataset.cu; renderCS(); return; }
   const tg = t.closest('[data-ct]'); if (tg) { csh.target = tg.dataset.ct; csh.fresh = true; renderCS(); return; }
   const d = t.closest('[data-cd]');
   if (d) {
     const dv = +d.dataset.cd;
     if (csh.mode === 'same') csh.val = Math.max(0, csh.val + dv);
-    else if (csh.target === 'start') csh.start = Math.max(0, csh.start + dv); else csh.step = csh.step + dv;
+    else if (csh.target === 'start') csh.start = Math.max(0, csh.start + dv);
+    else if (csh.target === 'peak') csh.peak = Math.max(0, csh.peak + dv);
+    else csh.step = csh.mode === 'updown' ? Math.max(1, csh.step + dv) : csh.step + dv;
     csh.fresh = false; renderCS(); return;
   }
   const kb = t.closest('[data-ck]');
@@ -1229,6 +1257,11 @@ $('#csheet').addEventListener('click', e => {
     x.unit = csh.unit; x.mode = csh.mode;
     if (csh.mode === 'same') { x.reps = csh.val; x.count = p.rounds; x.linked = true; }
     else if (csh.mode === 'ladder') { x.start = csh.start; x.step = csh.step; x.count = p.rounds; x.linked = true; }
+    else if (csh.mode === 'updown') {
+      x.start = csh.start; x.step = csh.step; x.peak = csh.peak; x.linked = false;
+      const n = upDown(x.start, x.step, x.peak).length;
+      if (p.format === 'time' && n > p.rounds) { p.rounds = n; syncRounds(p); }
+    }
     else {
       x.list = csh.list.replace(/-+$/, ''); x.linked = false;
       const n = parseList(x.list).length;
