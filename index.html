@@ -395,6 +395,20 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .crep,.cw{height:34px;background:var(--card2);border:1px solid var(--line);border-radius:10px;font-weight:700;font-size:15px}
 .crep small{font-size:11px;color:var(--muted)}
 #sessBody .part .crow input:not([type=checkbox]){padding:7px 4px}
+.crow{display:flex;align-items:center;gap:8px;margin-top:8px;min-height:36px}
+.clab{font-size:13px;color:var(--muted);font-weight:600;width:68px;flex:0 0 68px;white-space:nowrap;text-align:left}
+.crow .seg.cfmt{flex:1;margin-top:0}
+.cfmtarea{min-height:88px}
+.chint{font-size:12px;color:#61656c;padding-left:76px;min-height:36px}
+.rndbar{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.rndbar .clabel{margin:0}
+.samechk{margin:0;font-size:13px;gap:8px}
+.samechk input{transform:scale(1.15)}
+.rnd{background:var(--card2);border-radius:12px;padding:8px 10px;margin-top:8px}
+.rnd .sw-c{background:var(--card2)}
+.rnd .crep,.rnd .cw{background:var(--card)}
+.rndh{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.rndadd{display:block;margin:6px auto 0;color:var(--accent);font-weight:700;font-size:13px;padding:4px 10px}
 </style>
 </head>
 <body>
@@ -471,7 +485,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v22';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -764,14 +778,41 @@ function strengthHTML(p, i) {
     <div class="addrow"><button class="addSet">+ Add set</button></div>
   </div>`;
 }
-// ---- conditioning card: minutes → AMRAP / EMOM / For Time → rounds → exercises ----
+// ---- conditioning card: minutes → type → every/rounds → rounds of exercises ----
 const COND_FORMATS = [['amrap', 'AMRAP'], ['emom', 'EMOM'], ['time', 'For Time']];
 function syncRounds(p) {
   const s = p.score || (p.score = {});
   if (p.format === 'amrap') p.rounds = Math.max(1, parseInt(s.rounds) || 1);
-  else if (p.format === 'emom') p.rounds = p.cap && p.every ? Math.max(1, Math.floor(p.cap / p.every)) : Math.max(1, p.rounds || 1);
+  else if (p.format === 'emom') p.rounds = p.cap && p.every ? Math.max(1, Math.floor(p.cap / p.every + 0.02)) : Math.max(1, p.rounds || 1);
   else p.rounds = Math.max(1, p.rounds || 1);
-  p.ex.forEach(x => { if (x.linked) { x.count = p.rounds; regen(x); } });
+  if (p.same === false) {
+    p.byRound = p.byRound || [];
+    while (p.byRound.length < p.rounds) p.byRound.push([]);
+    p.byRound.length = p.rounds;
+    mergeRounds(p);
+  } else p.ex.forEach(x => { if (x.linked) { x.count = p.rounds; regen(x); } });
+}
+// round-by-round mode keeps one list per round; p.ex is rebuilt from it so history and stats keep working
+function mergeRounds(p) {
+  const m = new Map();
+  (p.byRound || []).forEach(round => round.forEach(e => {
+    const k = norm(e.name);
+    if (!m.has(k)) m.set(k, { name:e.name, equip:e.equip, unit:e.unit, impl:e.impl || 1, mode:'list', list:'', linked:false, wset:e.wset, bar:e.bar, sets:[] });
+    m.get(k).sets.push({ r:e.sets[0].r, w:e.sets[0].w || 0 });
+  }));
+  p.ex = [...m.values()].map(x => ({ ...x, list: x.sets.map(s => s.r).join('-') }));
+}
+function setSame(p, same) {
+  if (same === (p.same !== false)) return;
+  if (!same) {
+    p.byRound = Array.from({ length:p.rounds }, (_, i) => p.ex.map(x => {
+      const st = x.sets[i] || x.sets[x.sets.length - 1] || { r:0, w:0 };
+      return { name:x.name, equip:x.equip, unit:x.unit, impl:x.impl || 1, wset:x.wset, bar:x.bar, sets:[{ r:st.r || 0, w:st.w || 0 }] };
+    }));
+    p.same = false; mergeRounds(p);
+  } else {
+    mergeRounds(p); p.same = true; delete p.byRound;
+  }
 }
 function cRepsTxt(x) {
   const rs = (x.sets || []).map(s => s.r);
@@ -789,28 +830,37 @@ function cWTxt(x) {
   const mn = Math.min(...nz), mx = Math.max(...nz);
   return mn === mx ? `${pre}${num(mx)}` : `${pre}${num(mn)}–${num(mx)}`;
 }
+const cRow = (x, attrs) => `<div class="cex" ${attrs}><span class="cname">${esc(x.name)}</span><button class="crep">${cRepsTxt(x)}</button>${(EQ[x.equip] || EQ.other).noWeight ? '<span></span>' : `<button class="cw">${cWTxt(x)}</button>`}</div>`;
+const cHead = `<div class="cex chd"><span>Exercise</span><span>Reps</span><span>kg</span></div>`;
 function exRows(p) {
-  if (!p.ex.length) return `<div class="small" style="margin:6px 0 2px">No exercises yet — add what you do each round.</div>`;
-  return `<div class="cex chd"><span>Exercise</span><span>Per round</span><span>kg</span></div>` + p.ex.map((x, j) => swWrap('ex', `data-j="${j}"`,
-    `<div class="cex" data-j="${j}"><span class="cname">${esc(x.name)}</span><button class="crep">${cRepsTxt(x)}</button>${(EQ[x.equip] || EQ.other).noWeight ? '<span></span>' : `<button class="cw">${cWTxt(x)}</button>`}</div>`)).join('');
+  if (p.same === false) {
+    return (p.byRound || []).map((round, r) => `<div class="rnd"><div class="rndh">Round ${r + 1}</div>
+      ${round.length ? round.map((e, j) => swWrap('rex', `data-r="${r}" data-j="${j}"`, cRow(e, `data-r="${r}" data-j="${j}"`))).join('') : '<div class="small">Nothing yet</div>'}
+      <button class="addEx rndadd" data-r="${r}">+ Add exercise</button></div>`).join('');
+  }
+  return (p.ex.length ? cHead + p.ex.map((x, j) => swWrap('ex', `data-j="${j}"`, cRow(x, `data-j="${j}"`))).join('') : `<div class="small" style="margin:6px 0 2px">No exercises yet.</div>`)
+    + `<div class="addrow"><button class="addEx">+ Add exercise</button></div>`;
+}
+function fmtRows(p) {
+  const s = p.score || {};
+  if (p.format === 'amrap') return `<div class="crow"><span class="clab">Rounds</span>${stepper('data-f="sc.rounds"', s.rounds ?? '', '0')}<span class="cplus">+</span><input class="cmini" data-f="sc.reps" inputmode="numeric" placeholder="reps" value="${s.reps || ''}"></div>
+    <div class="crow chint">Rounds you finished — the reps box is for a part round.</div>`;
+  if (p.format === 'emom') return `<div class="crow"><span class="clab">Every</span>${stepper('data-f="every"', num(p.every || 1))}<span class="cplus">min</span></div>
+    <div class="crow"><span class="clab">Rounds</span>${stepper('data-f="emr"', p.rounds)}</div>`;
+  return `<div class="crow"><span class="clab">Rounds</span>${stepper('data-f="rounds"', p.rounds)}</div>
+    <div class="crow"><span class="clab">Time</span><input class="cmini" data-f="sc.min" inputmode="numeric" placeholder="min" value="${s.timeSec ? Math.floor(s.timeSec / 60) : ''}"><span class="cplus">:</span><input class="cmini" data-f="sc.sec" inputmode="numeric" placeholder="sec" value="${s.timeSec ? String(Math.round(s.timeSec % 60)).padStart(2, '0') : ''}"></div>`;
 }
 function condHTML(p, i) {
   if (!COND_FORMATS.some(f => f[0] === p.format)) p.format = 'time';
-  const s = p.score || (p.score = {});
-  let fmt = '';
-  if (p.format === 'amrap') fmt = `<div class="crow"><span class="clab">Rounds done</span>${stepper('data-f="sc.rounds"', s.rounds ?? '', '0')}<span class="cplus">+</span><input class="cmini" data-f="sc.reps" inputmode="numeric" placeholder="reps" value="${s.reps || ''}"></div>`;
-  else if (p.format === 'emom') fmt = `<div class="crow"><span class="clab">Every</span>${stepper('data-f="every"', p.every || 1)}<span class="cplus">min</span><b class="emomr">${p.cap ? `= ${p.rounds} round${p.rounds > 1 ? 's' : ''}` : ''}</b></div>`;
-  else fmt = `<div class="crow"><span class="clab">Rounds</span>${stepper('data-f="rounds"', p.rounds)}</div>
-    <div class="crow"><span class="clab">Your time</span><input class="cmini" data-f="sc.min" inputmode="numeric" placeholder="min" value="${s.timeSec ? Math.floor(s.timeSec / 60) : ''}"><span class="cplus">:</span><input class="cmini" data-f="sc.sec" inputmode="numeric" placeholder="sec" value="${s.timeSec ? String(Math.round(s.timeSec % 60)).padStart(2, '0') : ''}"></div>`;
+  if (!p.score) p.score = {};
   return `<div class="card part cblock" data-p="${i}">
     <div class="between"><span class="plabel">Conditioning</span><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
     <input class="titlein" data-f="name" placeholder="${esc(fmtLabel(p))}" value="${esc(p.name)}">
     <div class="crow"><span class="clab">Minutes</span>${stepper('data-f="cap"', p.cap ?? '', '—')}</div>
-    <div class="seg cfmt">${COND_FORMATS.map(([k, l]) => `<button class="fmt ${k === p.format ? 'on' : ''}" data-fmt="${k}">${l}</button>`).join('')}</div>
-    ${fmt}
-    <div class="clabel">Each round</div>
+    <div class="crow"><span class="clab">Type</span><div class="seg cfmt">${COND_FORMATS.map(([k, l]) => `<button class="fmt ${k === p.format ? 'on' : ''}" data-fmt="${k}">${l}</button>`).join('')}</div></div>
+    <div class="cfmtarea">${fmtRows(p)}</div>
+    <div class="between rndbar"><span class="clabel">${p.rounds} round${p.rounds > 1 ? 's' : ''}</span><label class="check samechk"><input type="checkbox" data-f="same" ${p.same !== false ? 'checked' : ''}> Same every round</label></div>
     <div class="exlist">${exRows(p)}</div>
-    <div class="addrow"><button class="addEx">+ Add exercise</button></div>
   </div>`;
 }
 const ICON_STR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8"/></svg>`;
@@ -954,14 +1004,21 @@ document.addEventListener('click', e => { if (swBlock && !e.target.closest('.sw-
 
 function setPartField(p, f, t, card) {
   if (f === 'name') { p.name = t.value; $('#sTitle').placeholder = autoTitle(draft); }
-  else if (f === 'rounds' || f === 'cap' || f === 'every' || f === 'sc.rounds') {
+  else if (f === 'same') { setSame(p, t.checked); rerenderPart(+card.dataset.p); }
+  else if (f === 'rounds' || f === 'cap' || f === 'every' || f === 'sc.rounds' || f === 'emr') {
     if (f === 'rounds') p.rounds = clampInt(t.value, 1, 100);
     else if (f === 'cap') p.cap = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0);
-    else if (f === 'every') p.every = clampInt(t.value, 1, 30);
+    else if (f === 'every') p.every = Math.max(0.25, parseFloat(t.value) || 1);
+    else if (f === 'emr') {  // EMOM rounds typed: keep the minutes, work out the interval (or the minutes if not set)
+      p.rounds = clampInt(t.value, 1, 100);
+      if (p.cap) p.every = r2(p.cap / p.rounds); else p.cap = Math.round(p.rounds * (p.every || 1));
+    }
     else p.score.rounds = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0);
     syncRounds(p);
     card.querySelector('.exlist').innerHTML = exRows(p);
-    const er = card.querySelector('.emomr'); if (er) er.textContent = p.cap ? `= ${p.rounds} round${p.rounds > 1 ? 's' : ''}` : '';
+    const q = k => card.querySelector(`[data-f="${k}"]`);
+    if (p.format === 'emom') { if (q('every') && f !== 'every') q('every').value = num(p.every); if (q('emr') && f !== 'emr') q('emr').value = p.rounds; if (q('cap') && f === 'emr') q('cap').value = p.cap; }
+    const rl = card.querySelector('.rndbar .clabel'); if (rl) rl.textContent = `${p.rounds} round${p.rounds > 1 ? 's' : ''}`;
     const ti = card.querySelector('.titlein'); if (ti) ti.placeholder = fmtLabel(p);
   }
   else if (f === 'sc.min' || f === 'sc.sec') {
@@ -1011,6 +1068,7 @@ logEl.addEventListener('click', async e => {
     const card = sw.closest('.part'), pi = +card.dataset.p, p = draft.parts[pi];
     if (kind === 'set') { p.ex[0].sets.splice(+sw.dataset.k, 1); rerenderPart(pi); stashDraft(); return; }
     if (kind === 'ex') { p.ex.splice(+sw.dataset.j, 1); rerenderPart(pi); stashDraft(); return; }
+    if (kind === 'rex') { p.byRound[+sw.dataset.r].splice(+sw.dataset.j, 1); mergeRounds(p); rerenderPart(pi); stashDraft(); return; }
     return;
   }
   const op = t.closest('[data-open]');
@@ -1051,7 +1109,7 @@ logEl.addEventListener('click', async e => {
   if (stp) {
     const inp = stp.parentElement.querySelector('input');
     const f = inp.dataset.f, lo = f === 'cap' || f === 'sc.rounds' ? 0 : 1;
-    inp.value = Math.max(lo, (parseInt(inp.value) || 0) + +stp.dataset.stp);
+    inp.value = Math.max(lo, (f === 'every' ? Math.round(parseFloat(inp.value) || 0) : (parseInt(inp.value) || 0)) + +stp.dataset.stp);
     setPartField(p, f, inp, card); return;
   }
   if (t.closest('.fmt')) {
@@ -1061,7 +1119,15 @@ logEl.addEventListener('click', async e => {
     rerenderPart(pi); stashDraft(); return;
   }
   if (false) { p.rx = t.closest('button').dataset.rx === '1'; card.querySelectorAll('.rxSeg button').forEach(b => b.classList.toggle('on', (b.dataset.rx === '1') === p.rx)); stashDraft(); return; }
-  if (t.closest('.addEx')) return openPicker('cond', pi);
+  const ae = t.closest('.addEx');
+  if (ae) return openPicker('cond', pi, ae.dataset.r != null ? +ae.dataset.r : null);
+  const rx = t.closest('.cex[data-r]');
+  if (rx) {
+    const r = +rx.dataset.r, j = +rx.dataset.j, e = p.byRound[r][j];
+    if (t.closest('.crep')) return openRepsFor(`${e.name} · Round ${r + 1}`, e.sets[0].r || 0, e.unit, v => { e.sets[0].r = v; mergeRounds(p); rerenderPart(pi); stashDraft(); });
+    if (t.closest('.cw')) return openWeightFor(e, e.sets[0].w || (e.equip === 'barbell' && !e.wset ? (e.bar ?? 20) : 0), `${e.name} · Round ${r + 1}`, v => { e.sets[0].w = v; e.wset = true; mergeRounds(p); rerenderPart(pi); stashDraft(); });
+    return;
+  }
   const cx = t.closest('.cex[data-j]');
   if (cx && t.closest('.crep')) return openCondReps(pi, +cx.dataset.j);
   if (cx && t.closest('.cw')) return openCondWeight(pi, +cx.dataset.j);
@@ -1183,9 +1249,12 @@ function openCondWeight(pi, j) {
 let rsh = null;
 function openReps(pi, k) {
   const x = draft.parts[pi].ex[0], s = x.sets[k], prev = x.sets[k - 1];
-  rsh = { pi, k, val: s.r || (prev && prev.r) || 0, fresh: true };
-  $('#rsTitle').textContent = `${x.name} · Set ${k + 1}`;
-  $('#rsUnit').textContent = x.unit === 'reps' ? 'reps' : x.unit;
+  openRepsFor(`${x.name} · Set ${k + 1}`, s.r || (prev && prev.r) || 0, x.unit, v => { x.sets[k].r = v; rerenderPart(pi); stashDraft(); });
+}
+function openRepsFor(title, val, unit, onSet) {
+  rsh = { val, fresh: true, onSet };
+  $('#rsTitle').textContent = title;
+  $('#rsUnit').textContent = unit || 'reps';
   $('#rsVal').textContent = rsh.val;
   $('#rsheet').classList.add('on'); document.body.style.overflow = 'hidden';
 }
@@ -1205,8 +1274,7 @@ $('#rsheet').addEventListener('click', e => {
   }
   if (d || key) { $('#rsVal').textContent = rsh.val; return; }
   if (t.closest('#rsOk')) {
-    const { pi, k, val } = rsh, x = draft.parts[pi].ex[0];
-    x.sets[k].r = val; closeRS(); rerenderPart(pi); stashDraft();
+    const { val, onSet } = rsh; closeRS(); onSet(val);
   }
 });
 
@@ -1472,8 +1540,8 @@ function openEditor(pi, j) {
   if (ed.view === 'pick') setTimeout(() => { const s = $('#exSearch'); if (s) s.focus(); }, 50);
 }
 function openStrengthPicker() { openPicker('strength'); }
-function openPicker(mode, pi) {
-  ed = { mode, pi, view:'pick', d:null, sel:'all', q:'' };
+function openPicker(mode, pi, round = null) {
+  ed = { mode, pi, round, view:'pick', d:null, sel:'all', q:'' };
   $('#ed').classList.add('on', 'modal'); document.body.style.overflow = 'hidden';
   renderEditor();
   setTimeout(() => { const s = $('#exSearch'); if (s) s.focus(); }, 50);
@@ -1542,6 +1610,18 @@ function choose(item) {
   if (ed.mode === 'strength') {
     draft.parts.push(strengthPart(item.name, item.equip, item.unit || 'reps', [0, 1, 2].map(() => ({ r:0, w:null, done:false }))));
     closeEditor(); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return;
+  }
+  if (ed.mode === 'cond' && ed.round != null) {
+    const pi = ed.pi, r = ed.round, p = draft.parts[pi];
+    const us = unitsFor(item), e = { name:item.name, equip:item.equip, unit: us.includes(item.unit) ? item.unit : us[0], impl:1, sets:[{ r:0, w:0 }] };
+    p.byRound[r].push(e); mergeRounds(p);
+    closeEditor(); rerenderPart(pi); stashDraft();
+    const E = EQ[e.equip] || EQ.other;
+    openRepsFor(`${e.name} · Round ${r + 1}`, 0, e.unit, v => {
+      e.sets[0].r = v; mergeRounds(p); rerenderPart(pi); stashDraft();
+      if (!E.noWeight && !E.optional) openWeightFor(e, e.equip === 'barbell' ? (e.bar ?? 20) : 0, `${e.name} · Round ${r + 1}`, w => { e.sets[0].w = w; e.wset = true; mergeRounds(p); rerenderPart(pi); stashDraft(); });
+    });
+    return;
   }
   if (ed.mode === 'cond') {
     const pi = ed.pi, p = draft.parts[pi];
