@@ -337,6 +337,20 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .pm{width:62px;height:62px;border-radius:50%;background:var(--card2);color:var(--accent);font-size:32px;font-weight:500;flex:0 0 62px;display:grid;place-items:center}
 .pm:active{background:#33363d}
 #rsheet .keypad button{padding:13px 0}
+.ormrow{display:flex;align-items:center;gap:10px;margin:8px 0 6px}
+.ormbox{flex:0 0 104px;background:var(--card2);border:1.5px solid var(--line);border-radius:12px;padding:6px 10px;text-align:left}
+.ormbox small{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.ormbox b{font-size:16px}
+.ormbox.on{border-color:var(--accent)}
+.ormbox.on b{color:var(--accent)}
+.ormsrc{font-size:12px;color:var(--muted);line-height:1.35}
+.ormsrc .linkbtn{font-size:12px;color:var(--accent);padding:0}
+.pctnow{color:var(--text);font-weight:700}
+.pcts{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.pcts::-webkit-scrollbar{display:none}
+.pcts .chip{flex:0 0 auto}
+#wsheet .keypad{margin-top:6px}
+#wsheet .keypad button{padding:11px 0}
 </style>
 </head>
 <body>
@@ -396,7 +410,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1061,12 +1075,14 @@ function renderWS() {
     const adjTxt = wsh.adj ? ` ${wsh.adj > 0 ? '+' : '−'} ${num(Math.abs(wsh.adj))}` : '';
     const brk = pl.length ? `${wsh.bar ? wsh.bar + ' bar' : 'No bar'} + 2 × (${pl.join(' + ')})${adjTxt}` : wsh.adj ? `${num(wsh.bar + wsh.adj)} kg` : wsh.bar ? `Empty ${wsh.bar} kg bar` : 'No bar — bodyweight';
     const noBar = wsh.bar === 0;
-    h = `${noBar ? '<div class="barsvg nobarbox">No bar — logging as bodyweight</div><div class="padbreak">&nbsp;</div>' : `${barSVG()}<div class="padbreak">${esc(brk)}</div>`}
+    const mx = maxFor(draft.parts[wsh.pi].ex[0]), tt = wsTotal();
+    const pctTxt = mx && tt ? ` · ${Math.round(tt / mx.v * 100)}% of 1RM` : '';
+    h = `${noBar ? '<div class="barsvg nobarbox">No bar — logging as bodyweight</div><div class="padbreak">&nbsp;</div>' : `${barSVG()}<div class="padbreak">${esc(brk)}${pctTxt}</div>`}
       <div class="chips" style="justify-content:center">${[20, 15, 10, 0].map(b => `<button class="chip ${wsh.bar === b ? 'on' : ''}" data-bar="${b}">${b ? b + ' kg bar' : 'No bar'}</button>`).join('')}</div>
       <div class="${noBar ? 'keepspace' : ''}"><div class="plab">Bumper plates — each tap loads a pair</div>
-      <div class="plates">${BUMPERS.map(x => `<button class="pl p${x}" data-plate="${x}">${x}<small>KG</small></button>`).join('')}</div>
+      <div class="plates">${[...BUMPERS].reverse().map(x => `<button class="pl p${x}" data-plate="${x}">${x}<small>KG</small></button>`).join('')}</div>
       <div class="plab">Change plates</div>
-      <div class="plates">${CHANGE.map(x => `<button class="pl pfrac" data-plate="${x}">${x}<small>KG</small></button>`).join('')}</div>
+      <div class="plates">${[...CHANGE].reverse().map(x => `<button class="pl pfrac" data-plate="${x}">${x}<small>KG</small></button>`).join('')}</div>
       <div class="padact"><button data-wact="undo">Undo</button><button data-wact="clear">Clear</button></div></div>`;
   } else if (wsh.tab === 'db') {
     const w = wsh.dbw || 0;
@@ -1075,12 +1091,38 @@ function renderWS() {
       <div class="plab">Dumbbell weight (each)</div>
       <div class="dbgrid">${DB_WEIGHTS.map(x => `<button class="preset ${w === x ? 'on' : ''}" data-db="${x}">${x}</button>`).join('')}</div>`;
   } else {
-    h = `${eqx === 'dumbbell' ? implSeg() : ''}<div class="keypad">${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k => `<button data-key="${k}">${k}</button>`).join('')}</div>
+    const xo = draft.parts[wsh.pi].ex[0], showPct = !(EQ[xo.equip] || {}).optional;
+    let pctHTML = '';
+    if (showPct) {
+      const m = maxFor(xo), cur = parseFloat(wsh.str) || 0;
+      const mv = wsh.maxEdit ? (wsh.maxStr || '') : (m ? num(m.v) : '');
+      const curPct = wsh.pct || (m && cur ? Math.round(cur / m.v * 100) : null);
+      pctHTML = `<div class="ormrow">
+          <button class="ormbox ${wsh.maxEdit ? 'on' : ''}" id="ormBox"><small>1RM</small><b>${mv !== '' ? mv + ' kg' : 'Set max'}</b></button>
+          <div class="ormsrc">${wsh.maxEdit ? 'Type your 1RM, then tap a %' : m ? esc(m.src) + (m.manual && m.logged ? ' · <button class="linkbtn" id="ormReset">use logged</button>' : '') : 'No max logged yet — tap to enter one'}${!wsh.maxEdit && curPct && cur ? `<br><b class="pctnow">${wsh.pct ? `${wsh.pct}% = ${num(m.v * wsh.pct / 100)}${num(m.v * wsh.pct / 100) !== cur ? ` → ${num(cur)}` : ''} kg` : `${num(cur)} kg = ${curPct}%`}</b>` : ''}</div>
+        </div>
+        <div class="pcts" id="pcts">${[40,45,50,55,60,65,70,75,80,85,90,95,100].map(p => `<button class="chip pct ${curPct === p ? 'on' : ''}" data-pct="${p}">${p}%</button>`).join('')}</div>`;
+    }
+    h = `${eqx === 'dumbbell' ? implSeg() : ''}${pctHTML}<div class="keypad">${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k => `<button data-key="${k}">${k}</button>`).join('')}</div>
       <div class="padact"><button data-wact="clear">${(EQ[draft.parts[wsh.pi].ex[0].equip] || {}).optional ? 'Bodyweight only' : 'Clear'}</button></div>`;
   }
   $('#wsBody').innerHTML = h;
+  const pc = $('#pcts'); if (pc) { const on = pc.querySelector('.on') || pc.querySelector('[data-pct="60"]'); if (on) pc.scrollLeft = on.offsetLeft - pc.clientWidth / 2 + on.offsetWidth / 2; }
+}
+// best known 1RM for an exercise: one you typed in, else a logged 1RM, else estimated from logged sets
+function maxFor(x) {
+  const k = norm(x.name), E = idx.ex[k], man = (settings.maxes || {})[k];
+  const logged = E && E.rm && E.rm[1] ? { v:E.rm[1].w, src:`Logged 1RM · ${fmtShort(E.rm[1].date)}` } : E && E.e1 ? { v:Math.round(E.e1 * 2) / 2, src:'Estimated from your logged sets' } : null;
+  if (man) return { v:man, src:'Your max', manual:true, logged:!!logged };
+  return logged;
 }
 const eqOf = () => wsh ? draft.parts[wsh.pi].ex[0].equip : null;
+const eqOfX = () => draft.parts[wsh.pi].ex[0];
+function commitMax() {
+  const v = parseFloat(wsh.maxStr);
+  if (v > 0) { settings.maxes = { ...(settings.maxes || {}), [norm(eqOfX().name)]: num(v) }; Store.saveSettings().catch(() => {}); }
+  wsh.maxEdit = false; wsh.maxStr = '';
+}
 $('#wsheet').addEventListener('click', e => {
   const t = e.target; if (!wsh) return;
   if (t.id === 'wsheet' || t.closest('#wsClose')) return closeWS();
@@ -1094,9 +1136,31 @@ $('#wsheet').addEventListener('click', e => {
   if (bar) { wsh.bar = +bar.dataset.bar; renderWS(); return; }  // plates stay loaded when toggling No bar
   const pl = t.closest('[data-plate]');
   if (pl) { wsh.plates.push(+pl.dataset.plate); renderWS(); return; }
+  if (t.closest('#ormReset')) { const k = norm(eqOfX().name); if (settings.maxes) delete settings.maxes[k]; Store.saveSettings().catch(() => {}); renderWS(); return; }
+  if (t.closest('#ormBox')) {
+    if (wsh.maxEdit) commitMax(); else { const m = maxFor(eqOfX()); wsh.maxEdit = true; wsh.maxStr = ''; wsh.maxPrev = m ? m.v : 0; }
+    renderWS(); return;
+  }
+  const pct = t.closest('[data-pct]');
+  if (pct) {
+    if (wsh.maxEdit) commitMax();
+    const m = maxFor(eqOfX());
+    if (!m) { wsh.maxEdit = true; wsh.maxStr = ''; renderWS(); toast('Enter your 1RM first'); return; }
+    const step = eqOf() === 'barbell' ? 1 : 0.5;  // barbell loads in 1 kg steps with 0.5 kg change plates
+    wsh.pct = +pct.dataset.pct;
+    wsh.str = String(num(Math.round(m.v * wsh.pct / 100 / step) * step));
+    renderWS(); return;
+  }
   const key = t.closest('[data-key]');
-  if (key) {
+  if (key && wsh.maxEdit) {
     const k = key.dataset.key;
+    if (k === '⌫') wsh.maxStr = wsh.maxStr.slice(0, -1);
+    else if (k === '.') { if (!wsh.maxStr.includes('.')) wsh.maxStr = (wsh.maxStr || '0') + '.'; }
+    else if (wsh.maxStr.length < 6) wsh.maxStr = (wsh.maxStr === '0' ? '' : wsh.maxStr) + k;
+    renderWS(); return;
+  }
+  if (key) {
+    const k = key.dataset.key; wsh.pct = null;
     if (k === '⌫') wsh.str = wsh.str.slice(0, -1);
     else if (k === '.') { if (!wsh.str.includes('.')) wsh.str = (wsh.str || '0') + '.'; }
     else if (wsh.str.length < 6) wsh.str = (wsh.str === '0' ? '' : wsh.str) + k;
@@ -1108,6 +1172,7 @@ $('#wsheet').addEventListener('click', e => {
     else { wsh.plates = []; wsh.adj = 0; wsh.str = ''; }
     renderWS(); return;
   }
+  if (t.closest('#wsOk') && wsh.maxEdit) commitMax();
   if (t.closest('#wsOk')) {
     const v = wsTotal(), { pi, k } = wsh, x = draft.parts[pi].ex[0];
     x.sets[k].w = v; x.sets[k].set = true;
