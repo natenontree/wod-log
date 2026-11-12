@@ -351,6 +351,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .pcts .chip{flex:0 0 auto}
 #wsheet .keypad{margin-top:6px}
 #wsheet .keypad button{padding:11px 0}
+.dbgrid.g4{grid-template-columns:repeat(4,1fr)}
 </style>
 </head>
 <body>
@@ -410,7 +411,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -424,6 +425,7 @@ const EQ = {
   kettlebell:{ label:'Kettlebell', impl:'KB', presets:[4,6,8,10,12,14,16,20,24,28,32,40] },
   plate:     { label:'Plate',      presets:[1.25,2.5,5,10,15,20,25] },
   medball:   { label:'Med ball',   presets:[3,4,5,6,9,10,12,14] },
+  sandbag:   { label:'Sandbag',    presets:[10,15,20,25,30,40,50,60,70,80,100,120] },
   gymnastics:{ label:'Gymnastics / Cali', presets:[5,9,10,14,20], optional:true },
   bodyweight:{ label:'Bodyweight', presets:[5,9,10,14,20], optional:true },
   cardio:    { label:'Cardio',     noWeight:true },
@@ -439,7 +441,8 @@ const LIB_RAW = {
   gymnastics:['Pull-up','Strict Pull-up','Chest-to-bar Pull-up','Toes-to-bar','Knees-to-elbow','Bar Muscle-up','Ring Muscle-up','Strict Ring Muscle-up','HSPU','Strict HSPU','Wall Walk','Handstand Walk|m','Handstand Hold|sec','Ring Dip','Ring Row','Rope Climb','Legless Rope Climb','Pistol','Double-under','L-sit|sec','Front Lever Hold|sec','Skin the Cat'],
   bodyweight:['Push-up','Burpee','Bar-facing Burpee','Burpee Box Jump Over','Box Jump','Box Jump Over','Air Squat','Walking Lunge','Jumping Lunge','Sit-up','GHD Sit-up','V-up','Single-under','Plank|sec'],
   cardio:['Row','Ski Erg','Bike Erg','Assault / Echo Bike','Run|m','Shuttle Run|m'],
-  other:['Sled Push|m','Sled Pull|m','Sandbag Carry|m','Sandbag Clean','Sandbag Over Shoulder']
+  sandbag:['Sandbag Clean','Sandbag Over Shoulder','Sandbag to Shoulder','Sandbag Squat','Sandbag Lunge|m','Sandbag Carry|m','Sandbag Bear Hug Carry|m'],
+  other:['Sled Push|m','Sled Pull|m']
 };
 const LIB = [];
 for (const eq of EQ_ORDER) (LIB_RAW[eq] || []).forEach(s => { const [n, u] = s.split('|'); LIB.push({ name:n, equip:eq, unit: u || (eq === 'cardio' ? 'cal' : 'reps') }); });
@@ -1003,6 +1006,11 @@ function wsLoad(w) {
   }
 }
 const DB_WEIGHTS = [5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25];
+const IMPL = {
+  dumbbell:   { tab:'Dumbbells',   weights:DB_WEIGHTS, dual:'DB', each:'Dumbbell weight (each)', draw:(w, n) => dbSVG(w, n) },
+  kettlebell: { tab:'Kettlebells', weights:[4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40], dual:'KB', each:'Kettlebell weight (each)', draw:(w, n) => kbSVG(w, n) },
+  sandbag:    { tab:'Sandbag',     weights:[10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 100, 120], each:'Sandbag weight', draw:w => sbSVG(w) }
+};
 function wsTotal() {
   if (wsh.tab === 'db') return Math.max(0, wsh.dbw || 0);
   if (wsh.tab === 'pad') return Math.max(0, parseFloat(wsh.str) || 0);
@@ -1010,7 +1018,7 @@ function wsTotal() {
 }
 function openWeight(pi, k) {
   const x = draft.parts[pi].ex[0], s = x.sets[k], prev = x.sets[k - 1];
-  wsh = { pi, k, tab: x.equip === 'barbell' ? (settings.wtab === 'pad' ? 'pad' : 'plates') : x.equip === 'dumbbell' ? (settings.dbtab === 'pad' ? 'pad' : 'db') : 'pad', bar: x.bar ?? 20, impl: x.impl === 2 ? 2 : 1 };
+  wsh = { pi, k, tab: x.equip === 'barbell' ? (settings.wtab === 'pad' ? 'pad' : 'plates') : IMPL[x.equip] ? ((settings.imptab || {})[x.equip] === 'pad' ? 'pad' : 'db') : 'pad', bar: x.bar ?? 20, impl: x.impl === 2 ? 2 : 1 };
   const w = effW(x, k);
   wsLoad(w == null ? 0 : w);
   $('#wsTitle').textContent = `${x.name} · Set ${k + 1}`;
@@ -1044,7 +1052,7 @@ function barSVG() {
     </svg>`;
 }
 function implSeg() {
-  return `<div class="seg" style="margin-top:6px"><button data-dbimpl="1" class="${wsh.impl !== 2 ? 'on' : ''}">Single DB</button><button data-dbimpl="2" class="${wsh.impl === 2 ? 'on' : ''}">Dual DBs</button></div>`;
+  return `<div class="seg" style="margin-top:6px"><button data-dbimpl="1" class="${wsh.impl !== 2 ? 'on' : ''}">Single ${IMPL[eqOf()].dual}</button><button data-dbimpl="2" class="${wsh.impl === 2 ? 'on' : ''}">Dual ${IMPL[eqOf()].dual}s</button></div>`;
 }
 function dbSVG(w, n) {
   // upright hex dumbbell seen side-on: each head is a chamfered oblong (octagon), plain chrome handle
@@ -1059,9 +1067,35 @@ function dbSVG(w, n) {
   };
   return `<svg viewBox="0 0 ${W} ${H}" class="barsvg">${n === 2 ? one(118) + one(202) : one(160)}</svg>`;
 }
+function kbSVG(w, n) {
+  // cast-iron kettlebell: round bell with a flat base, handle arch on top; grows with weight
+  const H = 82, on = w > 0, ww = w || 8;
+  const one = cx => {
+    const r = 10 + ww * 0.28, cyb = H - 3 - r * 0.92, hw = r * 0.6, top = cyb - r * 2.05;
+    const handle = `M${cx - hw},${cyb - r * 0.7} C${cx - hw * 1.15},${top} ${cx + hw * 1.15},${top} ${cx + hw},${cyb - r * 0.7}`;
+    return `<path d="${handle}" fill="none" stroke="${on ? '#ff5b1f' : '#3a3d44'}" stroke-width="${(r * 0.26 + 4).toFixed(1)}" stroke-linecap="round"/>
+      <path d="${handle}" fill="none" stroke="#26282d" stroke-width="${(r * 0.26).toFixed(1)}" stroke-linecap="round"/>
+      <path d="M${cx - r * 0.62},${H - 3} A${r},${r} 0 1 1 ${cx + r * 0.62},${H - 3} Z" fill="#26282d" stroke="${on ? '#ff5b1f' : '#3a3d44'}" stroke-width="2" stroke-linejoin="round"/>
+      ${on ? `<text x="${cx}" y="${cyb + r * 0.18}" fill="#ff5b1f" font-size="${(r * 0.55).toFixed(1)}" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">${num(w)}</text>` : ''}`;
+  };
+  return `<svg viewBox="0 0 320 ${H}" class="barsvg">${n === 2 ? one(118) + one(202) : one(160)}</svg>`;
+}
+function sbSVG(w) {
+  // sandbag: soft cylinder bag with two carry handles; grows with weight
+  const H = 82, on = w > 0, ww = w || 20, cx = 160;
+  const bw = 66 + ww * 0.95, bh = 30 + ww * 0.22, y = H - 3 - bh, x = cx - bw / 2, rx = bh * 0.42;
+  const stroke = on ? '#ff5b1f' : '#3a3d44';
+  const hdl = hx => `<path d="M${hx - 9},${y + 2} C${hx - 9},${y - 13} ${hx + 9},${y - 13} ${hx + 9},${y + 2}" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/>`;
+  return `<svg viewBox="0 0 320 ${H}" class="barsvg">
+    ${hdl(cx - bw * 0.2)}${hdl(cx + bw * 0.2)}
+    <rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${rx}" fill="#26282d" stroke="${stroke}" stroke-width="2"/>
+    <path d="M${x + rx * 1.1},${y + 3} V${y + bh - 3} M${x + bw - rx * 1.1},${y + 3} V${y + bh - 3}" stroke="#3a3d44" stroke-width="1.5" stroke-dasharray="3 3"/>
+    ${on ? `<text x="${cx}" y="${y + bh / 2 + 5}" fill="#ff5b1f" font-size="${Math.min(16, bh * 0.42).toFixed(1)}" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">${num(w)} kg</text>` : ''}
+  </svg>`;
+}
 function renderWS() {
   const eqx = draft.parts[wsh.pi].ex[0].equip;
-  const first = eqx === 'barbell' ? ['plates', 'Barbell plates'] : eqx === 'dumbbell' ? ['db', 'Dumbbells'] : null;
+  const first = eqx === 'barbell' ? ['plates', 'Barbell plates'] : IMPL[eqx] ? ['db', IMPL[eqx].tab] : null;
   $('#wsTabs').innerHTML = first ? `<button data-tab="${first[0]}" class="${wsh.tab === first[0] ? 'on' : ''}">${first[1]}</button><button data-tab="pad" class="${wsh.tab === 'pad' ? 'on' : ''}">Numpad</button>` : '';
   $('#wsTabs').classList.toggle('hidden', !first);
   const t = wsTotal();
@@ -1085,11 +1119,12 @@ function renderWS() {
       <div class="plates">${[...CHANGE].reverse().map(x => `<button class="pl pfrac" data-plate="${x}">${x}<small>KG</small></button>`).join('')}</div>
       <div class="padact"><button data-wact="undo">Undo</button><button data-wact="clear">Clear</button></div></div>`;
   } else if (wsh.tab === 'db') {
-    const w = wsh.dbw || 0;
-    h = `${dbSVG(w, wsh.impl)}<div class="padbreak">${w ? (wsh.impl === 2 ? `2 × ${num(w)} kg = ${num(w * 2)} kg total` : `1 × ${num(w)} kg`) : 'Pick a dumbbell weight'}</div>
-      ${implSeg()}
-      <div class="plab">Dumbbell weight (each)</div>
-      <div class="dbgrid">${DB_WEIGHTS.map(x => `<button class="preset ${w === x ? 'on' : ''}" data-db="${x}">${x}</button>`).join('')}</div>`;
+    const w = wsh.dbw || 0, cfg = IMPL[eqx];
+    const n = cfg.dual ? wsh.impl : 1;
+    h = `${cfg.draw(w, n)}<div class="padbreak">${w ? (n === 2 ? `2 × ${num(w)} kg = ${num(w * 2)} kg total` : cfg.dual ? `1 × ${num(w)} kg` : '&nbsp;') : 'Pick a weight'}</div>
+      ${cfg.dual ? implSeg() : ''}
+      <div class="plab">${cfg.each}</div>
+      <div class="dbgrid ${cfg.weights.length > 9 ? 'g4' : ''}">${cfg.weights.map(x => `<button class="preset ${w === x ? 'on' : ''}" data-db="${x}">${x}</button>`).join('')}</div>`;
   } else {
     const xo = draft.parts[wsh.pi].ex[0], showPct = !(EQ[xo.equip] || {}).optional;
     let pctHTML = '';
@@ -1103,7 +1138,7 @@ function renderWS() {
         </div>
         <div class="pcts" id="pcts">${[40,45,50,55,60,65,70,75,80,85,90,95,100].map(p => `<button class="chip pct ${curPct === p ? 'on' : ''}" data-pct="${p}">${p}%</button>`).join('')}</div>`;
     }
-    h = `${eqx === 'dumbbell' ? implSeg() : ''}${pctHTML}<div class="keypad">${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k => `<button data-key="${k}">${k}</button>`).join('')}</div>
+    h = `${IMPL[eqx] && IMPL[eqx].dual ? implSeg() : ''}${pctHTML}<div class="keypad">${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k => `<button data-key="${k}">${k}</button>`).join('')}</div>
       <div class="padact"><button data-wact="clear">${(EQ[draft.parts[wsh.pi].ex[0].equip] || {}).optional ? 'Bodyweight only' : 'Clear'}</button></div>`;
   }
   $('#wsBody').innerHTML = h;
@@ -1127,7 +1162,7 @@ $('#wsheet').addEventListener('click', e => {
   const t = e.target; if (!wsh) return;
   if (t.id === 'wsheet' || t.closest('#wsClose')) return closeWS();
   const tab = t.closest('[data-tab]');
-  if (tab) { const v = wsTotal(); wsh.tab = tab.dataset.tab; if (eqOf() === 'dumbbell') settings.dbtab = wsh.tab; else settings.wtab = wsh.tab; const b = wsh.bar; wsLoad(v); if (v) wsh.bar = b; renderWS(); return; }
+  if (tab) { const v = wsTotal(); wsh.tab = tab.dataset.tab; if (IMPL[eqOf()]) settings.imptab = { ...(settings.imptab || {}), [eqOf()]: wsh.tab }; else settings.wtab = wsh.tab; const b = wsh.bar; wsLoad(v); if (v) wsh.bar = b; renderWS(); return; }
   const dbb = t.closest('[data-db]');
   if (dbb) { wsh.dbw = +dbb.dataset.db; renderWS(); return; }
   const di = t.closest('[data-dbimpl]');
@@ -1177,7 +1212,7 @@ $('#wsheet').addEventListener('click', e => {
     const v = wsTotal(), { pi, k } = wsh, x = draft.parts[pi].ex[0];
     x.sets[k].w = v; x.sets[k].set = true;
     if (x.equip === 'barbell' && wsh.tab === 'plates') x.bar = wsh.bar;
-    if (x.equip === 'dumbbell') x.impl = wsh.impl;
+    if (IMPL[x.equip] && IMPL[x.equip].dual) x.impl = wsh.impl;
     // later sets not yet ticked or set by hand follow this weight
     for (let j = k + 1; j < x.sets.length; j++) if (!x.sets[j].done && !x.sets[j].set) x.sets[j].w = null;
     closeWS(); rerenderPart(pi); stashDraft();
