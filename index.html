@@ -471,7 +471,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v21';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1088,12 +1088,23 @@ $('#vsheet').addEventListener('click', e => {
   if (!x.sets[k].r) openReps(pi, k);
 });
 
+// which units make sense for an exercise (lifts are reps only; ergs cal or metres; carries metres; holds seconds)
+function unitsFor(x) {
+  const n = norm(x.name);
+  if ((settings.custom || []).some(c => norm(c.name) === n)) return UNITS;
+  if (x.equip === 'cardio') return /run|shuttle/.test(n) ? ['m'] : ['cal', 'm'];
+  if (/lunge/.test(n)) return ['reps', 'm'];
+  if (/carry|sled|handstand walk/.test(n)) return ['m'];
+  if (/hold|plank|l-sit/.test(n)) return ['sec'];
+  return ['reps'];
+}
 // ================= CONDITIONING REPS POPUP =================
 let csh = null;
 function openCondReps(pi, j) {
   const p = draft.parts[pi], x = p.ex[j];
   csh = { pi, j, mode: x.mode || 'same', val: +x.reps || (x.sets[0] && x.sets[0].r) || 0, start: +x.start || 0, step: x.step === '' || x.step == null ? 1 : +x.step,
           list: x.list || '', unit: x.unit || 'reps', target: 'start', fresh: true };
+  const us = unitsFor(x); if (!us.includes(csh.unit)) csh.unit = us[0];
   $('#csTitle').textContent = x.name;
   $('#csheet').classList.add('on'); document.body.style.overflow = 'hidden';
   renderCS();
@@ -1102,7 +1113,9 @@ function closeCS() { csh = null; $('#csheet').classList.remove('on'); document.b
 function renderCS() {
   const p = draft.parts[csh.pi], n = p.rounds;
   $$('#csMode button').forEach(b => b.classList.toggle('on', b.dataset.cm === csh.mode));
-  $('#csUnits').innerHTML = UNITS.map(u => `<button class="chip ${csh.unit === u ? 'on' : ''}" data-cu="${u}">${u}</button>`).join('');
+  const us = unitsFor(draft.parts[csh.pi].ex[csh.j]);
+  $('#csUnits').innerHTML = us.length > 1 ? us.map(u => `<button class="chip ${csh.unit === u ? 'on' : ''}" data-cu="${u}">${u}</button>`).join('') : '';
+  $('#csUnits').classList.toggle('hidden', us.length < 2);
   let h = '';
   if (csh.mode === 'same') h = `<div class="repsrow"><button class="pm" data-cd="-1">−</button><div class="repsval"><span class="csbig">${csh.val}</span><small>${csh.unit} each round · ${n} round${n > 1 ? 's' : ''}</small></div><button class="pm" data-cd="1">+</button></div>`;
   else if (csh.mode === 'ladder') {
@@ -1532,7 +1545,7 @@ function choose(item) {
   }
   if (ed.mode === 'cond') {
     const pi = ed.pi, p = draft.parts[pi];
-    const x = { name:item.name, equip:item.equip, unit:item.unit || 'reps', impl:1, mode:'same', reps:'', count:p.rounds, start:'', step:1, list:'', sets:[], linked:true };
+    const x = { name:item.name, equip:item.equip, unit:unitsFor(item).includes(item.unit) ? item.unit : unitsFor(item)[0], impl:1, mode:'same', reps:'', count:p.rounds, start:'', step:1, list:'', sets:[], linked:true };
     regen(x); p.ex.push(x);
     closeEditor(); rerenderPart(pi); stashDraft();
     openCondReps(pi, p.ex.length - 1);  // straight on to reps
