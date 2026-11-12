@@ -361,6 +361,9 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .vopt.on{border-color:var(--accent)}
 .vopt.on i{background:var(--accent);color:#fff}
 .vtxt{font-size:13px;font-weight:700}
+.wpick{display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;font-size:20px;font-weight:700}
+.wpick i{font-style:normal;color:var(--muted);font-size:22px}
+.wpick.empty span{color:var(--accent);font-size:16px}
 </style>
 </head>
 <body>
@@ -427,7 +430,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1064,11 +1067,20 @@ function wsTotal() {
   return wsh.bar === 0 ? 0 : Math.max(0, r2(wsh.bar + 2 * sum(wsh.plates) + wsh.adj));
 }
 function openWeight(pi, k) {
-  const x = draft.parts[pi].ex[0], s = x.sets[k], prev = x.sets[k - 1];
-  wsh = { pi, k, tab: x.equip === 'barbell' ? (settings.wtab === 'pad' ? 'pad' : 'plates') : IMPL[x.equip] ? ((settings.imptab || {})[x.equip] === 'pad' ? 'pad' : 'db') : 'pad', bar: x.bar ?? 20, impl: x.impl === 2 ? 2 : 1 };
-  const w = effW(x, k);
-  wsLoad(w == null ? 0 : w);
-  $('#wsTitle').textContent = `${x.name} · Set ${k + 1}`;
+  const x = draft.parts[pi].ex[0], w = effW(x, k);
+  openWeightFor(x, w == null ? 0 : w, `${x.name} · Set ${k + 1}`, v => {
+    x.sets[k].w = v; x.sets[k].set = true;
+    // later sets not yet ticked or set by hand follow this weight
+    for (let j = k + 1; j < x.sets.length; j++) if (!x.sets[j].done && !x.sets[j].set) x.sets[j].w = null;
+    rerenderPart(pi); stashDraft();
+    if (!x.sets[k].r) openReps(pi, k);  // straight on to reps
+  });
+}
+// shared weight popup (plates / dumbbells / kettlebells / sandbag / numpad) for strength and conditioning
+function openWeightFor(x, w0, title, onSet) {
+  wsh = { x, onSet, tab: x.equip === 'barbell' ? (settings.wtab === 'pad' ? 'pad' : 'plates') : IMPL[x.equip] ? ((settings.imptab || {})[x.equip] === 'pad' ? 'pad' : 'db') : 'pad', bar: x.bar ?? 20, impl: x.impl === 2 ? 2 : 1 };
+  wsLoad(w0);
+  $('#wsTitle').textContent = title;
   $('#wsheet').classList.add('on'); document.body.style.overflow = 'hidden';
   renderWS();
 }
@@ -1141,12 +1153,12 @@ function sbSVG(w) {
   </svg>`;
 }
 function renderWS() {
-  const eqx = draft.parts[wsh.pi].ex[0].equip;
+  const eqx = wsh.x.equip;
   const first = eqx === 'barbell' ? ['plates', 'Barbell plates'] : IMPL[eqx] ? ['db', IMPL[eqx].tab] : null;
   $('#wsTabs').innerHTML = first ? `<button data-tab="${first[0]}" class="${wsh.tab === first[0] ? 'on' : ''}">${first[1]}</button><button data-tab="pad" class="${wsh.tab === 'pad' ? 'on' : ''}">Numpad</button>` : '';
   $('#wsTabs').classList.toggle('hidden', !first);
   const t = wsTotal();
-  const xq = draft.parts[wsh.pi].ex[0], bwOk = xq.equip === 'barbell' || (EQ[xq.equip] || {}).optional;
+  const xq = wsh.x, bwOk = xq.equip === 'barbell' || (EQ[xq.equip] || {}).optional;
   const isBW = !t && bwOk && !(wsh.tab === 'pad' && wsh.str);
   $('#wsVal').textContent = t ? num(t) : isBW ? 'Bodyweight' : (wsh.str || '0');
   $('#wsVal').classList.toggle('bwtxt', isBW); $('#wsUnit').classList.toggle('hidden', isBW);
@@ -1156,7 +1168,7 @@ function renderWS() {
     const adjTxt = wsh.adj ? ` ${wsh.adj > 0 ? '+' : '−'} ${num(Math.abs(wsh.adj))}` : '';
     const brk = pl.length ? `${wsh.bar ? wsh.bar + ' bar' : 'No bar'} + 2 × (${pl.join(' + ')})${adjTxt}` : wsh.adj ? `${num(wsh.bar + wsh.adj)} kg` : wsh.bar ? `Empty ${wsh.bar} kg bar` : 'No bar — bodyweight';
     const noBar = wsh.bar === 0;
-    const mx = maxFor(draft.parts[wsh.pi].ex[0]), tt = wsTotal();
+    const mx = maxFor(wsh.x), tt = wsTotal();
     const pctTxt = mx && tt ? ` · ${Math.round(tt / mx.v * 100)}% of 1RM` : '';
     h = `${noBar ? '<div class="barsvg nobarbox">No bar — logging as bodyweight</div><div class="padbreak">&nbsp;</div>' : `${barSVG()}<div class="padbreak">${esc(brk)}${pctTxt}</div>`}
       <div class="chips" style="justify-content:center">${[20, 15, 10, 0].map(b => `<button class="chip ${wsh.bar === b ? 'on' : ''}" data-bar="${b}">${b ? b + ' kg bar' : 'No bar'}</button>`).join('')}</div>
@@ -1173,7 +1185,7 @@ function renderWS() {
       <div class="plab">${cfg.each}</div>
       <div class="dbgrid ${cfg.weights.length > 9 ? 'g4' : ''}">${cfg.weights.map(x => `<button class="preset ${w === x ? 'on' : ''}" data-db="${x}">${x}</button>`).join('')}</div>`;
   } else {
-    const xo = draft.parts[wsh.pi].ex[0], showPct = !(EQ[xo.equip] || {}).optional;
+    const xo = wsh.x, showPct = !(EQ[xo.equip] || {}).optional;
     let pctHTML = '';
     if (showPct) {
       const m = maxFor(xo), cur = parseFloat(wsh.str) || 0;
@@ -1186,7 +1198,7 @@ function renderWS() {
         <div class="pcts" id="pcts">${[40,45,50,55,60,65,70,75,80,85,90,95,100].map(p => `<button class="chip pct ${curPct === p ? 'on' : ''}" data-pct="${p}">${p}%</button>`).join('')}</div>`;
     }
     h = `${IMPL[eqx] && IMPL[eqx].dual ? implSeg() : ''}${pctHTML}<div class="keypad">${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k => `<button data-key="${k}">${k}</button>`).join('')}</div>
-      <div class="padact"><button data-wact="clear">${(EQ[draft.parts[wsh.pi].ex[0].equip] || {}).optional ? 'Bodyweight only' : 'Clear'}</button></div>`;
+      <div class="padact"><button data-wact="clear">${(EQ[wsh.x.equip] || {}).optional ? 'Bodyweight only' : 'Clear'}</button></div>`;
   }
   $('#wsBody').innerHTML = h;
   const pc = $('#pcts'); if (pc) { const on = pc.querySelector('.on') || pc.querySelector('[data-pct="60"]'); if (on) pc.scrollLeft = on.offsetLeft - pc.clientWidth / 2 + on.offsetWidth / 2; }
@@ -1198,8 +1210,8 @@ function maxFor(x) {
   if (man) return { v:man, src:'Your max', manual:true, logged:!!logged };
   return logged;
 }
-const eqOf = () => wsh ? draft.parts[wsh.pi].ex[0].equip : null;
-const eqOfX = () => draft.parts[wsh.pi].ex[0];
+const eqOf = () => wsh ? wsh.x.equip : null;
+const eqOfX = () => wsh.x;
 function commitMax() {
   const v = parseFloat(wsh.maxStr);
   if (v > 0) { settings.maxes = { ...(settings.maxes || {}), [norm(eqOfX().name)]: num(v) }; Store.saveSettings().catch(() => {}); }
@@ -1256,15 +1268,11 @@ $('#wsheet').addEventListener('click', e => {
   }
   if (t.closest('#wsOk') && wsh.maxEdit) commitMax();
   if (t.closest('#wsOk')) {
-    const v = wsTotal(), { pi, k } = wsh, x = draft.parts[pi].ex[0];
-    x.sets[k].w = v; x.sets[k].set = true;
+    const v = wsTotal(), x = wsh.x, cb = wsh.onSet;
     if (x.equip === 'barbell' && wsh.tab === 'plates') x.bar = wsh.bar;
     if (IMPL[x.equip] && IMPL[x.equip].dual) x.impl = wsh.impl;
-    // later sets not yet ticked or set by hand follow this weight
-    for (let j = k + 1; j < x.sets.length; j++) if (!x.sets[j].done && !x.sets[j].set) x.sets[j].w = null;
-    closeWS(); rerenderPart(pi); stashDraft();
-    Store.saveSettings().catch(() => {});
-    if (!x.sets[k].r) openReps(pi, k);  // straight on to reps
+    closeWS(); Store.saveSettings().catch(() => {});
+    cb(v);
   }
 });
 
@@ -1324,11 +1332,11 @@ function renderEditor() {
       <div id="edScheme"></div>
       <label class="l">Counted in</label>
       <div class="chips" id="unitChips">${UNITS.map(u => `<button class="chip ${d.unit === u ? 'on' : ''}" data-unit="${u}">${u}</button>`).join('')}</div>
-      ${E.impl ? `<label class="l">${E.impl}s</label><div class="seg" id="implSeg"><button data-impl="1" class="${d.impl !== 2 ? 'on' : ''}">Single ${E.impl}</button><button data-impl="2" class="${d.impl === 2 ? 'on' : ''}">Double ${E.impl}s</button></div>` : ''}
+      ${E.impl && !IMPL[d.equip] ? `<label class="l">${E.impl}s</label><div class="seg" id="implSeg"><button data-impl="1" class="${d.impl !== 2 ? 'on' : ''}">Single ${E.impl}</button><button data-impl="2" class="${d.impl === 2 ? 'on' : ''}">Double ${E.impl}s</button></div>` : ''}
       <label class="l">Rounds — tap one to change just that round</label>
       <div id="edSets"></div>
       <div id="edSetReps"></div>
-      ${E.noWeight ? '' : `<label class="l" id="padLabel"></label><div class="pad" id="edPad"></div>`}
+      ${E.noWeight ? '' : `<label class="l" id="padLabel"></label><button class="wpick" id="edW"></button>`}
       <div class="edtotal" id="edTotal"></div>
       <div class="err" id="edErr"></div>`;
     renderScheme(); renderSets(); if (!E.noWeight) renderPad(); renderTotal();
@@ -1418,6 +1426,15 @@ function padBreak() {
   return `${pad.adj ? base + ' kg' : pad.bar + ' bar'} + 2 × (${pad.plates.join(' + ')})`;
 }
 function renderPad() {
+  // conditioning: a button showing the weight for the selected rounds; tap opens the shared weight popup
+  const d = ed.d, b = $('#edW'); if (!b) return;
+  const w = ed.sel === 'all' || d.sets.length === 1 ? commonW(d) : d.sets[ed.sel].w;
+  const E = EQ[d.equip] || EQ.other;
+  const txt = w > 0 ? `${IMPL[d.equip] && IMPL[d.equip].dual && d.impl === 2 ? '2 × ' : ''}${num(w)} kg` : (d.equip === 'barbell' || E.optional) && d.wset ? 'Bodyweight' : 'Set weight';
+  b.innerHTML = `<span>${txt}</span><i>›</i>`;
+  b.classList.toggle('empty', !(w > 0));
+}
+function renderPadOld() {
   const d = ed.d, E = EQ[d.equip] || EQ.other, t = padTotal();
   const steps = [0.25, 0.5, 1, 2.5];
   const fine = `<div class="plab">Fine adjust</div><div class="fine"><button data-fine="-1">−</button><div class="chips">${steps.map(s => `<button class="chip ${settings.step === s ? 'on' : ''}" data-stepsz="${s}">${s}</button>`).join('')}</div><button data-fine="1">+</button></div>`;
@@ -1507,8 +1524,17 @@ edEl.addEventListener('click', async e => {
   if (ub) { d.unit = ub.dataset.unit; $$('#unitChips .chip').forEach(c => c.classList.toggle('on', c.dataset.unit === d.unit)); renderSets(); renderTotal(); return; }
   const ib = t.closest('[data-impl]');
   if (ib) { d.impl = +ib.dataset.impl; $$('#implSeg button').forEach(b => b.classList.toggle('on', +b.dataset.impl === d.impl)); renderSets(); renderTotal(); return; }
+  if (t.closest('#edW')) {
+    const all = ed.sel === 'all' || d.sets.length === 1, cur = all ? commonW(d) : d.sets[ed.sel].w;
+    const w0 = cur > 0 ? cur : d.equip === 'barbell' && !d.wset ? (d.bar ?? 20) : 0;
+    openWeightFor(d, w0, `${d.name} · ${all ? 'all rounds' : 'round ' + (ed.sel + 1)}`, v => {
+      if (all) d.sets.forEach(st => st.w = v); else d.sets[ed.sel].w = v;
+      d.wset = true; renderSets(); renderPad(); renderTotal();
+    });
+    return;
+  }
   const sc = t.closest('[data-s]');
-  if (sc) { ed.sel = sc.dataset.s === 'all' ? 'all' : +sc.dataset.s; initPad(ed.sel === 'all' ? commonW(d) : d.sets[ed.sel].w); renderSets(); if ($('#edPad')) renderPad(); return; }
+  if (sc) { ed.sel = sc.dataset.s === 'all' ? 'all' : +sc.dataset.s; renderSets(); renderPad(); return; }
   // pad
   const bb = t.closest('[data-bar]');
   if (bb) { pad.bar = +bb.dataset.bar; pad.active = true; settings.bar = pad.bar; applyPad(); return; }
