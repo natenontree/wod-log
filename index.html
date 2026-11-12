@@ -352,6 +352,15 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 #wsheet .keypad{margin-top:6px}
 #wsheet .keypad button{padding:11px 0}
 .dbgrid.g4{grid-template-columns:repeat(4,1fr)}
+#vsheet{align-items:center;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+#vsheet .wsheet{border-radius:20px;padding:14px;max-height:100%;overflow-y:auto}
+.vopt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card2);border:1.5px solid transparent;border-radius:12px;padding:11px 12px;margin-top:8px}
+.vopt i{font-style:normal;width:26px;height:26px;border-radius:50%;background:var(--bg);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted);flex:0 0 26px}
+.vopt b{display:block;font-size:15px}
+.vopt small{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+.vopt.on{border-color:var(--accent)}
+.vopt.on i{background:var(--accent);color:#fff}
+.vtxt{font-size:13px;font-weight:700}
 </style>
 </head>
 <body>
@@ -407,11 +416,18 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
     <button class="btn" id="rsOk" style="margin-top:12px">Set reps</button>
   </div>
 </div>
+<div class="sheet-bg" id="vsheet">
+  <div class="sheet wsheet">
+    <div class="between"><b id="vsTitle" class="wstitle"></b><button id="vsClose" class="linkbtn" style="font-size:22px;padding:0 4px" aria-label="Close">✕</button></div>
+    <div class="small" style="margin:6px 0 4px">Pick the version you did — easiest at the top</div>
+    <div id="vsList"></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -433,12 +449,12 @@ const EQ = {
 };
 const EQ_ORDER = Object.keys(EQ);
 const LIB_RAW = {
-  barbell:['Back Squat','Front Squat','Overhead Squat','Deadlift','Sumo Deadlift High Pull','Clean','Power Clean','Squat Clean','Hang Power Clean','Hang Squat Clean','Clean & Jerk','Snatch','Power Snatch','Squat Snatch','Hang Power Snatch','Thruster','Strict Press','Push Press','Push Jerk','Split Jerk','Shoulder to Overhead','Bench Press','Barbell GTOH','Barbell Row','Front Rack Lunge','Back Rack Lunge','Good Morning'],
+  barbell:['Back Squat','Front Squat','Overhead Squat','Deadlift','Sumo Deadlift','Sumo Deadlift High Pull','Clean','Power Clean','Squat Clean','Hang Power Clean','Hang Squat Clean','Clean & Jerk','Snatch','Power Snatch','Squat Snatch','Hang Power Snatch','Thruster','Strict Press','Push Press','Push Jerk','Split Jerk','Shoulder to Overhead','Bench Press','Barbell GTOH','Barbell Row','Front Rack Lunge','Back Rack Lunge','Good Morning'],
   dumbbell:['DB Snatch','DB Clean','DB Hang Clean','DB Clean & Jerk','DB Thruster','DB Push Press','DB Shoulder to Overhead','DB Front Squat','DB Box Step-up','DB Walking Lunge','DB Overhead Lunge','Devil Press','DB Deadlift','DB Bench Press','DB Row','DB Farmer Carry|m'],
   kettlebell:['KB Swing (Russian)','KB Swing (American)','Goblet Squat','KB Snatch','KB Clean','KB Deadlift','Turkish Get-up','KB Farmer Carry|m'],
   plate:['Plate GTOH','Plate Overhead Lunge','Plate Front Raise','Plate Sit-up','Plate Pinch Hold|sec'],
   medball:['Wall Ball','Med Ball Clean','Slam Ball','Med Ball Sit-up'],
-  gymnastics:['Pull-up','Strict Pull-up','Chest-to-bar Pull-up','Toes-to-bar','Knees-to-elbow','Bar Muscle-up','Ring Muscle-up','Strict Ring Muscle-up','HSPU','Strict HSPU','Wall Walk','Handstand Walk|m','Handstand Hold|sec','Ring Dip','Ring Row','Rope Climb','Legless Rope Climb','Pistol','Double-under','L-sit|sec','Front Lever Hold|sec','Skin the Cat'],
+  gymnastics:['Pull-up','Strict Pull-up','Chest-to-bar Pull-up','Toes-to-bar','Knees-to-elbow','Bar Muscle-up','Ring Muscle-up','Strict Ring Muscle-up','HSPU','Strict HSPU','Wall Walk','Handstand Walk|m','Handstand Hold|sec','Ring Dip','Ring Row','Rope Climb','Legless Rope Climb','Pistol','Double-under','L-sit|sec','Front Lever Hold|sec','Skin the Cat','Candlestick'],
   bodyweight:['Push-up','Burpee','Bar-facing Burpee','Burpee Box Jump Over','Box Jump','Box Jump Over','Air Squat','Walking Lunge','Jumping Lunge','Sit-up','GHD Sit-up','V-up','Single-under','Plank|sec'],
   cardio:['Row','Ski Erg','Bike Erg','Assault / Echo Bike','Run|m','Shuttle Run|m'],
   sandbag:['Sandbag Clean','Sandbag Over Shoulder','Sandbag to Shoulder','Sandbag Squat','Sandbag Lunge|m','Sandbag Carry|m','Sandbag Bear Hug Carry|m'],
@@ -510,6 +526,12 @@ function scoreVal(p) {
   if (p.format === 'load') return s.load || null;
   return null;
 }
+// exercises logged by version (scaling) instead of weight — easiest first
+const VERSIONS = {
+  'candlestick': [['Tucked', 'Both legs tucked'], ['One leg', 'One leg tucked, one straight'], ['Straddle', 'Legs straddled'], ['Full', 'Full — legs straight'], ['To stand', 'Full, roll up to stand']]
+};
+const versionsOf = x => VERSIONS[norm(x.name)] || null;
+function effV(x, k) { for (let j = k; j >= 0; j--) if (x.sets[j].v) return x.sets[j].v; return null; }
 function schemeStr(x) {
   const sets = x.sets || []; if (!sets.length) return '';
   const rs = sets.map(s => s.r), ws = sets.map(s => s.w || 0);
@@ -519,6 +541,8 @@ function schemeStr(x) {
   const pre = x.impl === 2 ? '2×' : '';
   if (sameW) { if (ws[0]) out += ` @ ${pre}${fmtW(ws[0])}`; }
   else { const nz = ws.filter(Boolean); out += ` @ ${pre}${num(Math.min(...nz))}–${fmtW(Math.max(...nz))}`; }
+  const vs = [...new Set(sets.map(s => s.v).filter(Boolean))];
+  if (vs.length) out += ` · ${vs.join(' / ')}`;
   return out;
 }
 function exTotals(x) {
@@ -669,7 +693,7 @@ function liveSets(x) {
   const sets = x.sets || [];
   if (!sets.some(s => 'done' in s)) return sets.filter(s => s.r > 0);
   const any = sets.some(s => s.done);
-  return sets.map((s, k) => ({ r:s.r, w: s.w != null ? s.w : (effW(x, k) ?? 0), done:s.done })).filter(s => any ? s.done : s.r > 0);
+  return sets.map((s, k) => ({ r:s.r, w: s.w != null ? s.w : (effW(x, k) ?? 0), done:s.done, ...(versionsOf(x) && effV(x, k) ? { v:effV(x, k) } : {}) })).filter(s => any ? s.done : s.r > 0);
 }
 const exLive = x => ({ ...x, sets: liveSets(x) });
 const swWrap = (kind, attrs, inner, cls = '') => `<div class="sw ${cls}" data-sw="${kind}" ${attrs}><button class="sw-del" tabindex="-1">Delete</button><div class="sw-c">${inner}</div></div>`;
@@ -681,16 +705,17 @@ function strengthHTML(p, i) {
   const rows = x.sets.map((s, k) => {
     const prev = k > 0 ? x.sets[k - 1] : null;
     const own = s.w != null && (s.done || s.w > 0 || x.equip === 'barbell' || s.set);
-    const wTxt = E.noWeight ? '—' : own ? wLbl(x, s.w) : `<span class="dim">${wLbl(x, effW(x, k))}</span>`;
+    const V = versionsOf(x);
+    const wTxt = V ? (s.v ? `<span class="vtxt">${esc(s.v)}</span>` : `<span class="dim vtxt">${esc(effV(x, k) || 'Pick')}</span>`) : E.noWeight ? '—' : own ? wLbl(x, s.w) : `<span class="dim">${wLbl(x, effW(x, k))}</span>`;
     return swWrap('set', `data-k="${k}"`, `<div class="srow ${s.done ? 'done' : ''}" data-k="${k}"><span class="sn">${k + 1}</span>
-      <button class="wbtn" ${E.noWeight ? 'disabled' : ''}>${wTxt}</button>
+      <button class="wbtn ${V ? 'vbtn' : ''}" ${E.noWeight && !V ? 'disabled' : ''}>${wTxt}</button>
       <button class="rin">${s.r ? s.r : `<span class="dim">${prev && prev.r ? prev.r : '0'}</span>`}</button>
       <button class="tick" aria-label="Mark set done">✓</button></div>`);
   }).join('');
   return `<div class="card part sblock" data-p="${i}">
     <div class="between"><div><div class="plabel">Strength / Skill</div><h3 class="btitle">${esc(x.name)}</h3></div><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
     ${last ? `<div class="small" style="margin-top:2px">Last time: ${esc(last.str)} · ${fmtShort(last.date)}</div>` : ''}
-    <div class="srow shd"><span>Set</span><span>${E.noWeight ? '' : E.optional ? 'Added kg' : E.impl ? (x.impl === 2 ? 'kg · dual' : 'kg · single') : 'kg'}</span><span>${x.unit === 'reps' ? 'Reps' : x.unit}</span><span></span></div>
+    <div class="srow shd"><span>Set</span><span>${versionsOf(x) ? 'Version' : E.noWeight ? '' : E.optional ? 'Added kg' : E.impl ? (x.impl === 2 ? 'kg · dual' : 'kg · single') : 'kg'}</span><span>${x.unit === 'reps' ? 'Reps' : x.unit}</span><span></span></div>
     ${rows}
     <div class="addrow"><button class="addSet">+ Add set</button></div>
   </div>`;
@@ -927,13 +952,14 @@ logEl.addEventListener('click', async e => {
   if (p.kind === 'strength') {
     const x = p.ex[0], E = EQ[x.equip] || EQ.other;
     const row = t.closest('.srow'), k = row ? +row.dataset.k : -1;
-    if (t.closest('.wbtn') && k >= 0) return openWeight(pi, k);
+    if (t.closest('.wbtn') && k >= 0) return versionsOf(x) ? openVersions(pi, k) : openWeight(pi, k);
     if (t.closest('.rin') && k >= 0) return openReps(pi, k);
     if (t.closest('.tick') && k >= 0) {
       const s = x.sets[k], prev = x.sets[k - 1];
       if (!s.done) {
         if (!s.r && prev && prev.r) s.r = prev.r;
-        if (!E.noWeight && !(s.w != null && (s.w > 0 || s.set || x.equip === 'barbell'))) s.w = effW(x, k) ?? 0;
+        if (versionsOf(x)) { if (!s.v) s.v = effV(x, k); if (!s.v) { openVersions(pi, k); return; } s.w = 0; }
+        else if (!E.noWeight && !(s.w != null && (s.w > 0 || s.set || x.equip === 'barbell'))) s.w = effW(x, k) ?? 0;
         if (!s.r) { openReps(pi, k); return; }
         s.done = true;
       } else s.done = false;
@@ -957,6 +983,27 @@ logEl.addEventListener('click', async e => {
   if (t.closest('.rxSeg button')) { p.rx = t.closest('button').dataset.rx === '1'; card.querySelectorAll('.rxSeg button').forEach(b => b.classList.toggle('on', (b.dataset.rx === '1') === p.rx)); stashDraft(); return; }
   if (t.closest('.addEx')) return openEditor(pi, null);
   const er = t.closest('.exrow'); if (er) return openEditor(pi, +er.dataset.j);
+});
+
+// ================= VERSION PICKER (scaled progressions) =================
+let vsh = null;
+function openVersions(pi, k) {
+  const x = draft.parts[pi].ex[0], cur = effV(x, k);
+  vsh = { pi, k };
+  $('#vsTitle').textContent = `${x.name} · Set ${k + 1}`;
+  $('#vsList').innerHTML = versionsOf(x).map(([shortName, long], i) => `<button class="vopt ${cur === shortName ? 'on' : ''}" data-v="${esc(shortName)}"><i>${i + 1}</i><span><b>${esc(shortName)}</b><small>${esc(long)}</small></span></button>`).join('');
+  $('#vsheet').classList.add('on'); document.body.style.overflow = 'hidden';
+}
+function closeVS() { vsh = null; $('#vsheet').classList.remove('on'); document.body.style.overflow = ''; }
+$('#vsheet').addEventListener('click', e => {
+  const t = e.target; if (!vsh) return;
+  if (t.id === 'vsheet' || t.closest('#vsClose')) return closeVS();
+  const o = t.closest('[data-v]'); if (!o) return;
+  const { pi, k } = vsh, x = draft.parts[pi].ex[0];
+  x.sets[k].v = o.dataset.v; x.sets[k].w = 0;
+  for (let j = k + 1; j < x.sets.length; j++) if (!x.sets[j].done) delete x.sets[j].v;  // later sets follow
+  closeVS(); rerenderPart(pi); stashDraft();
+  if (!x.sets[k].r) openReps(pi, k);
 });
 
 // ================= REPS PAD (strength sets) =================
