@@ -421,6 +421,15 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .stepper.mini button{width:26px;flex:0 0 26px;font-size:17px}
 #sessBody .part .stepper.mini input{padding:6px 0!important;min-width:0;width:100%;text-align:center}
 .chint2{font-size:12px;color:#61656c}
+.cxchk{margin:10px 2px 0;font-weight:600}
+.cxbar{display:flex;align-items:center;gap:8px;background:var(--card2);border-radius:12px;padding:8px 8px 8px 12px;margin-top:8px}
+.cxlist{flex:1;font-size:13px;line-height:1.6}
+.cxlist span b,.cxn,.xsrow b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;margin-right:5px}
+.cxlist i{font-style:normal;color:var(--muted);margin:0 5px}
+.cxok{width:auto;padding:9px 14px;font-size:14px}
+.xsrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;font-weight:600}
+.xsrow .stepper{width:128px;flex:0 0 128px}
+.xsrow .stepper input{padding:8px 0;text-align:center;font-size:18px;font-weight:700}
 </style>
 </head>
 <body>
@@ -493,11 +502,18 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
     <button class="btn" id="csOk" style="margin-top:12px">Set reps</button>
   </div>
 </div>
+<div class="sheet-bg" id="xsheet">
+  <div class="sheet wsheet">
+    <div class="between"><b id="xsTitle" class="wstitle"></b><button id="xsClose" class="linkbtn" style="font-size:22px;padding:0 4px" aria-label="Close">✕</button></div>
+    <div id="xsBody"></div>
+    <button class="btn" id="xsOk" style="margin-top:12px">Set reps</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -519,7 +535,7 @@ const EQ = {
 };
 const EQ_ORDER = Object.keys(EQ);
 const LIB_RAW = {
-  barbell:['Back Squat','Front Squat','Overhead Squat','Deadlift','Sumo Deadlift','Sumo Deadlift High Pull','Clean','Power Clean','Squat Clean','Hang Power Clean','Hang Squat Clean','Clean & Jerk','Snatch','Power Snatch','Squat Snatch','Hang Power Snatch','Thruster','Strict Press','Push Press','Push Jerk','Split Jerk','Shoulder to Overhead','Bench Press','Barbell GTOH','Barbell HTOH','Barbell Row','Front Rack Lunge','Back Rack Lunge','Good Morning'],
+  barbell:['Back Squat','Front Squat','Overhead Squat','Deadlift','Sumo Deadlift','Sumo Deadlift High Pull','Clean','Power Clean','Squat Clean','Hang Power Clean','Hang Squat Clean','Clean & Jerk','Snatch','Power Snatch','Squat Snatch','Hang Power Snatch','Hang Snatch','Thruster','Strict Press','Push Press','Push Jerk','Split Jerk','Shoulder to Overhead','Bench Press','Barbell GTOH','Barbell HTOH','Barbell Row','Front Rack Lunge','Back Rack Lunge','Good Morning'],
   dumbbell:['DB Snatch','DB Clean','DB Hang Clean','DB Clean & Jerk','DB Thruster','DB Push Press','DB Shoulder to Overhead','DB Front Squat','DB Box Step-up','DB Walking Lunge','DB Overhead Lunge','Devil Press','DB Deadlift','DB Bench Press','DB Row','DB Farmer Carry|m'],
   kettlebell:['KB Swing (Russian)','KB Swing (American)','Goblet Squat','KB Snatch','KB Clean','KB Deadlift','Turkish Get-up','KB Farmer Carry|m'],
   plate:['Plate GTOH','Plate Overhead Lunge','Plate Front Raise','Plate Sit-up','Plate Pinch Hold|sec'],
@@ -605,9 +621,10 @@ const versionsOf = x => VERSIONS[norm(x.name)] || null;
 function effV(x, k) { for (let j = k; j >= 0; j--) if (x.sets[j].v) return x.sets[j].v; return null; }
 function schemeStr(x) {
   const sets = x.sets || []; if (!sets.length) return '';
-  const rs = sets.map(s => s.r), ws = sets.map(s => s.w || 0);
+  const rs = sets.map(s => s.cr ? s.cr.join('+') : s.r), ws = sets.map(s => s.w || 0);
   const sameR = rs.every(r => r === rs[0]), sameW = ws.every(w => w === ws[0]);
-  let out = sameR ? (sets.length > 1 ? `${sets.length}×${rs[0]}` : `${rs[0]}`) : rs.join('-');
+  const par = v => String(v).includes('+') ? `(${v})` : v;
+  let out = sameR ? (sets.length > 1 ? `${sets.length}×${par(rs[0])}` : `${rs[0]}`) : rs.join(', ');
   out += unitSfx(x.unit);
   const pre = x.impl === 2 ? '2×' : '';
   if (sameW) { if (ws[0]) out += ` @ ${pre}${fmtW(ws[0])}`; }
@@ -773,7 +790,7 @@ function liveSets(x) {
   const sets = x.sets || [];
   if (!sets.some(s => 'done' in s)) return sets.filter(s => s.r > 0);
   const any = sets.some(s => s.done);
-  return sets.map((s, k) => ({ r:s.r, w: s.w != null ? s.w : (effW(x, k) ?? 0), done:s.done, ...(versionsOf(x) && effV(x, k) ? { v:effV(x, k) } : {}) })).filter(s => any ? s.done : s.r > 0);
+  return sets.map((s, k) => ({ r:s.r, w: s.w != null ? s.w : (effW(x, k) ?? 0), done:s.done, ...(x.complex ? { cr: s.cr || cxDefault(x, k) } : {}), ...(versionsOf(x) && effV(x, k) ? { v:effV(x, k) } : {}) })).filter(s => any ? s.done : s.r > 0);
 }
 const exLive = x => ({ ...x, sets: liveSets(x) });
 const swWrap = (kind, attrs, inner, cls = '') => `<div class="sw ${cls}" data-sw="${kind}" ${attrs}><button class="sw-del" tabindex="-1">Delete</button><div class="sw-c">${inner}</div></div>`;
@@ -789,11 +806,11 @@ function strengthHTML(p, i) {
     const wTxt = V ? (s.v ? `<span class="vtxt">${esc(s.v)}</span>` : `<span class="dim vtxt">${esc(effV(x, k) || 'Pick')}</span>`) : E.noWeight ? '—' : own ? wLbl(x, s.w) : `<span class="dim">${wLbl(x, effW(x, k))}</span>`;
     return swWrap('set', `data-k="${k}"`, `<div class="srow ${s.done ? 'done' : ''}" data-k="${k}"><span class="sn">${k + 1}</span>
       <button class="wbtn ${V ? 'vbtn' : ''}" ${E.noWeight && !V ? 'disabled' : ''}>${wTxt}</button>
-      <button class="rin">${s.r ? s.r : `<span class="dim">${prev && prev.r ? prev.r : '0'}</span>`}</button>
+      <button class="rin">${x.complex ? (s.cr ? s.cr.join('+') : `<span class="dim">${cxDefault(x, k).join('+')}</span>`) : s.r ? s.r : `<span class="dim">${prev && prev.r ? prev.r : '0'}</span>`}</button>
       <button class="tick" aria-label="Mark set done">✓</button></div>`);
   }).join('');
   return `<div class="card part sblock" data-p="${i}">
-    <div class="between"><div><div class="plabel">Strength / Skill</div><h3 class="btitle">${esc(x.name)}</h3></div><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
+    <div class="between"><div><div class="plabel">${x.complex ? 'Complex' : 'Strength / Skill'}</div><h3 class="btitle">${esc(x.name)}</h3></div><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
     ${last ? `<div class="small" style="margin-top:2px">Last time: ${esc(last.str)} · ${fmtShort(last.date)}</div>` : ''}
     <div class="srow shd"><span>Set</span><span>${versionsOf(x) ? 'Version' : E.noWeight ? '' : E.optional ? 'Added kg' : E.impl ? (x.impl === 2 ? 'kg · dual' : 'kg · single') : 'kg'}</span><span>${x.unit === 'reps' ? 'Reps' : x.unit}</span><span></span></div>
     ${rows}
@@ -1159,6 +1176,7 @@ logEl.addEventListener('click', async e => {
     if (t.closest('.tick') && k >= 0) {
       const s = x.sets[k], prev = x.sets[k - 1];
       if (!s.done) {
+        if (x.complex && !s.cr) { s.cr = cxDefault(x, k); s.r = s.cr.reduce((a, b) => a + b, 0); }
         if (!s.r && prev && prev.r) s.r = prev.r;
         if (versionsOf(x)) { if (!s.v) s.v = effV(x, k); if (!s.v) { openVersions(pi, k); return; } s.w = 0; }
         else if (!E.noWeight && !(s.w != null && (s.w > 0 || s.set || x.equip === 'barbell'))) s.w = effW(x, k) ?? 0;
@@ -1334,8 +1352,23 @@ function openCondWeight(pi, j) {
 
 // ================= REPS PAD (strength sets) =================
 let rsh = null;
+const cxDefault = (x, k) => { for (let j = k; j >= 0; j--) if (x.sets[j].cr) return x.sets[j].cr.slice(); return x.complex.map(() => 1); };
+function openComplexReps(pi, k) {
+  const x = draft.parts[pi].ex[0];
+  xsh = { pi, k, cr: cxDefault(x, k) };
+  $('#xsTitle').textContent = `Set ${k + 1} · reps of each`;
+  renderXS(); $('#xsheet').classList.add('on'); document.body.style.overflow = 'hidden';
+}
+let xsh = null;
+function renderXS() {
+  const x = draft.parts[xsh.pi].ex[0];
+  $('#xsBody').innerHTML = x.complex.map((n, i) => `<div class="xsrow"><span><b>${i + 1}</b>${esc(n)}</span><div class="stepper"><button data-xd="-1" data-xi="${i}">−</button><input value="${xsh.cr[i]}" readonly><button data-xd="1" data-xi="${i}">+</button></div></div>`).join('') +
+    `<div class="cprev">This set: ${xsh.cr.join(' + ')} = ${xsh.cr.reduce((a, b) => a + b, 0)} reps</div>`;
+}
+function closeXS() { xsh = null; $('#xsheet').classList.remove('on'); document.body.style.overflow = ''; }
 function openReps(pi, k) {
   const x = draft.parts[pi].ex[0], s = x.sets[k], prev = x.sets[k - 1];
+  if (x.complex) return openComplexReps(pi, k);
   openRepsFor(`${x.name} · Set ${k + 1}`, s.r || (prev && prev.r) || 0, x.unit, v => { x.sets[k].r = v; rerenderPart(pi); stashDraft(); });
 }
 function openRepsFor(title, val, unit, onSet) {
@@ -1362,6 +1395,20 @@ $('#rsheet').addEventListener('click', e => {
   if (d || key) { $('#rsVal').textContent = rsh.val; return; }
   if (t.closest('#rsOk')) {
     const { val, onSet } = rsh; closeRS(); onSet(val);
+  }
+});
+
+$('#xsheet').addEventListener('click', e => {
+  const t = e.target; if (!xsh) return;
+  if (t.id === 'xsheet' || t.closest('#xsClose')) return closeXS();
+  const d = t.closest('[data-xd]');
+  if (d) { const i = +d.dataset.xi; xsh.cr[i] = Math.max(0, xsh.cr[i] + +d.dataset.xd); renderXS(); return; }
+  if (t.closest('#xsOk')) {
+    const { pi, k, cr } = xsh, x = draft.parts[pi].ex[0];
+    x.sets[k].cr = cr; x.sets[k].r = cr.reduce((a, b) => a + b, 0);
+    for (let j = k + 1; j < x.sets.length; j++) if (!x.sets[j].done && !x.sets[j].crSet) delete x.sets[j].cr;  // later sets follow
+    x.sets[k].crSet = true;
+    closeXS(); rerenderPart(pi); stashDraft();
   }
 });
 
@@ -1642,7 +1689,9 @@ function renderEditor() {
   $('#edFoot').classList.toggle('hidden', ed.view === 'pick');
   if (ed.view === 'pick') {
     $('#edTitle').textContent = ed.mode === 'strength' ? 'Strength / Skill' : ed.mode === 'cond' ? 'Add exercise' : ed.d ? 'Change exercise' : 'Add exercise';
-    body.innerHTML = `<input id="exSearch" placeholder="Search or type a new exercise" value="${esc(ed.q)}" autocomplete="off" style="margin-top:12px"><div id="pickList"></div>`;
+    body.innerHTML = `<input id="exSearch" placeholder="Search or type a new exercise" value="${esc(ed.q)}" autocomplete="off" style="margin-top:12px">
+      ${ed.mode === 'strength' ? `<label class="check cxchk"><input type="checkbox" id="cxTick" ${ed.cx ? 'checked' : ''}> Create complex</label><div id="cxSel"></div>` : ''}<div id="pickList"></div>`;
+    renderCxSel();
     renderPickList();
   } else {
     $('#edTitle').textContent = ed.j == null ? 'Add exercise' : 'Edit exercise';
@@ -1691,7 +1740,13 @@ function renderPickList() {
   }
   el.innerHTML = html;
 }
-const pickRow = (e, inCat) => `<button class="pick" data-pick="${esc(e.name)}"><span>${esc(e.name)}</span><small>${[inCat ? '' : (EQ[e.equip] ? EQ[e.equip].label : ''), e.unit && e.unit !== 'reps' ? e.unit : ''].filter(Boolean).join(' · ')}</small></button>`;
+const cxNum = name => { if (!ed || !ed.cx) return ''; const i = (ed.cxList || []).findIndex(e => norm(e.name) === norm(name)); return i < 0 ? '' : `<b class="cxn">${i + 1}</b>`; };
+function renderCxSel() {
+  const el = $('#cxSel'); if (!el) return;
+  const L = ed.cxList || [];
+  el.innerHTML = ed.cx ? `<div class="cxbar"><div class="cxlist">${L.length ? L.map((e, i) => `<span><b>${i + 1}</b>${esc(e.name)}</span>`).join('<i>→</i>') : '<span class="small">Tap exercises in order</span>'}</div><button class="btn cxok" id="cxOk">OK${L.length ? ` (${L.length})` : ''}</button></div>` : '';
+}
+const pickRow = (e, inCat) => `<button class="pick" data-pick="${esc(e.name)}"><span>${cxNum(e.name)}${esc(e.name)}</span><small>${[inCat ? '' : (EQ[e.equip] ? EQ[e.equip].label : ''), e.unit && e.unit !== 'reps' ? e.unit : ''].filter(Boolean).join(' · ')}</small></button>`;
 
 function choose(item) {
   if (ed.mode === 'strength') {
@@ -1822,6 +1877,9 @@ function edSet(k, v) {
 }
 
 const edEl = $('#ed');
+edEl.addEventListener('change', e => {
+  if (e.target.id === 'cxTick' && ed) { ed.cx = e.target.checked; ed.cxList = []; renderPickList(); renderCxSel(); }
+});
 edEl.addEventListener('input', e => {
   const t = e.target; if (!ed) return;
   if (t.id === 'exSearch') { ed.q = t.value; renderPickList(); return; }
@@ -1840,7 +1898,24 @@ edEl.addEventListener('click', async e => {
   const cat = t.closest('[data-cat]');
   if (cat) { ed.open = ed.open || new Set(); const k = cat.dataset.cat; ed.open.has(k) ? ed.open.delete(k) : ed.open.add(k); renderPickList(); return; }
   const pk = t.closest('[data-pick]');
+  if (pk && ed.cx) {
+    const item = allExercises()[norm(pk.dataset.pick)]; if (!item) return;
+    ed.cxList = ed.cxList || [];
+    const i = ed.cxList.findIndex(e => norm(e.name) === norm(item.name));
+    if (i >= 0) ed.cxList.splice(i, 1); else ed.cxList.push(item);
+    renderPickList(); renderCxSel(); return;
+  }
   if (pk) { const item = allExercises()[norm(pk.dataset.pick)]; if (item) choose(item); return; }
+  if (t.closest('#cxOk')) {
+    const L = ed.cxList || [];
+    if (!L.length) { toast('Pick the exercises in order first'); return; }
+    if (L.length === 1) { ed.cx = false; choose(L[0]); return; }
+    const equip = L.every(e => e.equip === L[0].equip) ? L[0].equip : (L.some(e => e.equip === 'barbell') ? 'barbell' : L[0].equip);
+    const part = strengthPart(L.map(e => e.name).join(' + '), equip, 'reps', [0, 1, 2].map(() => ({ r:0, w:null, done:false })));
+    part.ex[0].complex = L.map(e => e.name);
+    draft.parts.push(part);
+    closeEditor(); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return;
+  }
   const ne = t.closest('[data-neweq]');
   if (ne) {
     const eq = ne.dataset.neweq, item = { name: ed.q.trim(), equip: eq, unit: eq === 'cardio' ? 'cal' : 'reps' };
@@ -1927,7 +2002,7 @@ function computeIndex() {
         const t = exTotals(x);
         if (t.mw > 0 && E.maxW > 0 && t.mw > E.maxW + 1e-9) f.push(`${x.name} — heaviest`);
         if (t.mw > E.maxW) { E.maxW = t.mw; E.maxWDate = s.date; }
-        if (p.format === 'strength' && x.equip === 'barbell') {
+        if (p.format === 'strength' && x.equip === 'barbell' && !x.complex) {
           x.sets.forEach(st => {
             if (!st.w || st.r > 10 || st.r < 1) return;
             const prev = E.rm[st.r];
