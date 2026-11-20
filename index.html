@@ -430,6 +430,25 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 .xsrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;font-weight:600}
 .xsrow .stepper{width:128px;flex:0 0 128px}
 .xsrow .stepper input{padding:8px 0;text-align:center;font-size:18px;font-weight:700}
+#tsheet{align-items:center;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+#tsheet .wsheet{border-radius:20px;padding:14px;max-height:100%;overflow-y:auto}
+#tsheet .keypad button{padding:12px 0}
+#tsheet .chip{padding:5px 12px;font-size:13px}
+#tsMode button{font-size:13px;padding:8px 2px}
+.tsum{text-align:center;font-size:24px;font-weight:800;margin:6px 0 2px}
+.tslist{display:block;font-size:22px;font-weight:700;word-break:break-all;min-height:30px}
+.c3 .c3text{margin-top:4px;font-size:14px;line-height:1.45;min-height:64px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:none;overflow:hidden}
+.c3 .cex{grid-template-columns:1fr 76px 84px}
+.c3 .cex.chd{margin-top:12px}
+.ctot{height:34px;background:var(--card2);border:1px solid var(--line);border-radius:10px;font-weight:700;font-size:15px}
+.ctot small{font-size:11px;color:var(--muted)}
+.cdash{text-align:center;color:var(--muted)}
+.c3st{gap:5px}
+.c3score{min-height:0}
+.c3 .clab{width:60px;flex:0 0 60px}
+.c3 .cfmt button{white-space:nowrap;font-size:12.5px;padding:6px 2px}
+.c3st .chip{padding:5px 10px;font-size:12.5px}
+.c3 .clabel{margin-top:14px}
 </style>
 </head>
 <body>
@@ -509,11 +528,21 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
     <button class="btn" id="xsOk" style="margin-top:12px">Set reps</button>
   </div>
 </div>
+<div class="sheet-bg" id="tsheet">
+  <div class="sheet wsheet">
+    <div class="between"><b id="tsTitle" class="wstitle"></b><button id="tsClose" class="linkbtn" style="font-size:22px;padding:0 4px" aria-label="Close">✕</button></div>
+    <div class="seg" id="tsMode" style="margin-top:10px"><button data-tm="total">Total</button><button data-tm="pxr">Per round × rounds</button><button data-tm="list">List</button></div>
+    <div class="chips" id="tsUnits" style="margin-top:8px;justify-content:center"></div>
+    <div id="tsBody"></div>
+    <div class="keypad" id="tsKeys"></div>
+    <button class="btn" id="tsOk" style="margin-top:12px">Set total</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v27';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -587,6 +616,7 @@ function newPart() { return { name:'', format:'time', rounds:1, every:2, cap:'',
 function newDraft() { return { id: uid(), date: todayStr(), name:'', parts:[], rpe:7, notes:'' }; }
 
 function fmtLabel(p) {
+  if (p.v3) return c3Label(p);
   switch (p.format) {
     case 'time':  return (p.rounds > 1 ? `${p.rounds} RFT` : 'For Time') + (p.cap ? ` · cap ${p.cap}'` : '');
     case 'amrap': return 'AMRAP' + (p.cap ? ` ${p.cap}'` : '') + (p.ladder ? ` · ladder ${ladderPreview(p, 3)}` : '');
@@ -597,6 +627,7 @@ function fmtLabel(p) {
   }
 }
 function scoreStr(p) {
+  if (p.v3) return c3Score(p);
   const s = p.score || {};
   switch (p.format) {
     case 'time':  return s.capped ? `CAP${s.capReps ? ' + ' + s.capReps : ''}` : (s.timeSec ? fmtTime(s.timeSec) : '');
@@ -607,6 +638,7 @@ function scoreStr(p) {
   }
 }
 function scoreVal(p) {
+  if (p.v3) return c3ScoreVal(p);
   const s = p.score || {};
   if (p.format === 'time') return s.capped ? (s.capReps || 0) : (s.timeSec ? 1e7 - s.timeSec : null);
   if (p.format === 'amrap') return (s.rounds || s.reps) ? (s.rounds || 0) * 1000 + (s.reps || 0) : null;
@@ -620,6 +652,10 @@ const VERSIONS = {
 const versionsOf = x => VERSIONS[norm(x.name)] || null;
 function effV(x, k) { for (let j = k; j >= 0; j--) if (x.sets[j].v) return x.sets[j].v; return null; }
 function schemeStr(x) {
+  if (x.total != null && x.sets && x.sets.length === 1 && !x.complex) {
+    const t = num(x.total || x.sets[0].r || 0), w = x.sets[0].w || 0;
+    return `${t} ${x.unit === 'reps' ? 'reps' : x.unit}${w ? ` @ ${IMPL[x.equip] && IMPL[x.equip].dual && x.impl === 2 ? '2×' : ''}${fmtW(w)}` : ''}`;
+  }
   const sets = x.sets || []; if (!sets.length) return '';
   const rs = sets.map(s => s.cr ? s.cr.join('+') : s.r), ws = sets.map(s => s.w || 0);
   const sameR = rs.every(r => r === rs[0]), sameW = ws.every(w => w === ws[0]);
@@ -923,7 +959,190 @@ function fmtRows(p) {
   return `<div class="crow"><span class="clab">Rounds</span>${stepper('data-f="rounds"', p.rounds)}</div>
     <div class="crow"><span class="clab">Time</span><input class="cmini" data-f="sc.min" inputmode="numeric" placeholder="min" value="${s.timeSec ? Math.floor(s.timeSec / 60) : ''}"><span class="cplus">:</span><input class="cmini" data-f="sc.sec" inputmode="numeric" placeholder="sec" value="${s.timeSec ? String(Math.round(s.timeSec % 60)).padStart(2, '0') : ''}"></div>`;
 }
+const TS_INIT = [];
+// ===== conditioning card (v3): minutes · type · WOD as written · exercises (weight + total) · score =====
+const C3_TYPES = [['amrap', 'AMRAP'], ['emom', 'EMOM'], ['time', 'For Time'], ['other', 'Other']];
+const C3_SCORES = [['time', 'Time'], ['rr', 'Rds + reps'], ['reps', 'Reps'], ['load', 'Load'], ['none', 'None']];
+const c3DefaultScore = f => ({ amrap:'rr', emom:'none', time:'time', other:'none' }[f] || 'none');
+function newCond3() { return { ...newPart(), kind:'conditioning', v3:true, format:'amrap', scoreType:'rr', text:'', cap:'', ex:[] }; }
+// older conditioning cards become v3: their exercises keep weight and total, their structure goes into the text box
+function toCond3(p) {
+  if (p.v3) return p;
+  const lines = [fmtLabel(p)].concat(p.ex.map(x => `${x.name} ${schemeStr(exLive(x))}`));
+  if (p.notes) lines.push(p.notes);
+  p.text = p.text || lines.filter(Boolean).join('\n');
+  p.ex = p.ex.map(x => {
+    const L = exLive(x), total = sum(L.sets.map(s => s.r)), w = Math.max(0, ...L.sets.map(s => s.w || 0));
+    return { name:x.name, equip:x.equip, unit:x.unit || 'reps', impl:x.impl || 1, bar:x.bar, wset:x.wset, total, w, sets:[{ r:total, w }] };
+  });
+  if (!C3_TYPES.some(t => t[0] === p.format)) p.format = 'other';
+  p.scoreType = p.format === 'amrap' ? 'rr' : p.format === 'time' ? 'time' : (p.score && p.score.load ? 'load' : 'none');
+  delete p.byRound; delete p.ladder; delete p.same;
+  p.v3 = true; return p;
+}
+function c3Label(p) {
+  const t = { amrap:'AMRAP', emom:'EMOM', time:'For Time', other:'WOD' }[p.format] || 'WOD';
+  if (!p.cap) return t;
+  return p.format === 'time' ? `${t} · cap ${p.cap}'` : `${t} ${p.cap}'`;
+}
+function c3Score(p) {
+  const s = p.score || {};
+  switch (p.scoreType) {
+    case 'time': return s.capped ? `CAP${s.capReps ? ' + ' + s.capReps : ''}` : (s.timeSec ? fmtTime(s.timeSec) : '');
+    case 'rr': return (s.rounds || s.reps) ? `${s.rounds || 0} + ${s.reps || 0}` : '';
+    case 'reps': return s.reps ? `${s.reps} reps` : '';
+    case 'load': return s.load ? fmtW(s.load) : '';
+    default: return '';
+  }
+}
+function c3ScoreVal(p) {
+  const s = p.score || {};
+  switch (p.scoreType) {
+    case 'time': return s.capped ? (s.capReps || 0) : (s.timeSec ? 1e7 - s.timeSec : null);
+    case 'rr': return (s.rounds || s.reps) ? (s.rounds || 0) * 1000 + (s.reps || 0) : null;
+    case 'reps': return s.reps || null;
+    case 'load': return s.load || null;
+    default: return null;
+  }
+}
+const c3WTxt = x => {
+  const E = EQ[x.equip] || EQ.other; if (E.noWeight) return '';
+  if (x.w > 0) return `${IMPL[x.equip] && IMPL[x.equip].dual && x.impl === 2 ? '2×' : ''}${num(x.w)}`;
+  return E.optional || (x.wset && x.equip === 'barbell') ? '<span class="bwl dim">BW</span>' : '<span class="cph">+ kg</span>';
+};
+const c3TotTxt = x => x.total > 0 ? `${num(x.total)}${x.unit === 'reps' ? '' : `<small> ${x.unit}</small>`}` : '<span class="cph">Total</span>';
+function c3Rows(p) {
+  if (!p.ex.length) return '<div class="small" style="margin:4px 0 2px">No exercises yet.</div>';
+  return `<div class="cex chd"><span>Exercise</span><span>kg</span><span>Total</span></div>` + p.ex.map((x, j) => swWrap('ex', `data-j="${j}"`,
+    `<div class="cex" data-j="${j}"><span class="cname">${esc(x.name)}</span>${(EQ[x.equip] || EQ.other).noWeight ? '<span class="cdash">—</span>' : `<button class="cw">${c3WTxt(x)}</button>`}<button class="ctot">${c3TotTxt(x)}</button></div>`)).join('');
+}
+function c3ScoreHTML(p) {
+  const s = p.score || {};
+  switch (p.scoreType) {
+    case 'time': return `<div class="crow"><input class="cmini" data-f="sc.min" inputmode="numeric" placeholder="min" value="${s.timeSec && !s.capped ? Math.floor(s.timeSec / 60) : ''}"><span class="cplus">:</span><input class="cmini" data-f="sc.sec" inputmode="numeric" placeholder="sec" value="${s.timeSec && !s.capped ? String(Math.round(s.timeSec % 60)).padStart(2, '0') : ''}">
+      <label class="check" style="margin:0 0 0 8px"><input type="checkbox" data-f="sc.capped" ${s.capped ? 'checked' : ''}> Capped</label>${s.capped ? `<input class="cmini" data-f="sc.capReps" inputmode="numeric" placeholder="reps" value="${s.capReps || ''}">` : ''}</div>`;
+    case 'rr': return `<div class="crow"><input class="cmini" data-f="sc.rounds" inputmode="numeric" placeholder="rounds" value="${s.rounds ?? ''}"><span class="cplus">rounds +</span><input class="cmini" data-f="sc.reps" inputmode="numeric" placeholder="reps" value="${s.reps ?? ''}"><span class="cplus">reps</span></div>`;
+    case 'reps': return `<div class="crow"><input class="cmini" data-f="sc.reps" inputmode="numeric" placeholder="0" value="${s.reps ?? ''}"><span class="cplus">total reps / cal</span></div>`;
+    case 'load': return `<div class="crow"><input class="cmini" data-f="sc.load" inputmode="decimal" placeholder="0" value="${s.load || ''}"><span class="cplus">kg heaviest</span></div>`;
+    default: return '';
+  }
+}
+function cond3HTML(p, i) {
+  return `<div class="card part cblock c3" data-p="${i}">
+    <div class="between"><span class="plabel">Conditioning</span><button class="xbtn rmPart" aria-label="Delete block">×</button></div>
+    <input class="titlein" data-f="name" placeholder="${esc(c3Label(p))}" value="${esc(p.name)}">
+    <div class="crow"><span class="clab">Minutes</span>${stepper('data-f="cap"', p.cap ?? '', '—')}</div>
+    <div class="crow"><span class="clab">Type</span><div class="seg cfmt">${C3_TYPES.map(([k, l]) => `<button class="c3type ${k === p.format ? 'on' : ''}" data-t3="${k}">${l}</button>`).join('')}</div></div>
+    <div class="clabel">The WOD (as written)</div>
+    <textarea class="c3text" data-f="text" rows="3" placeholder="Paste or type it as it's on the whiteboard">${esc(p.text || '')}</textarea>
+    <div class="exlist">${c3Rows(p)}</div>
+    <div class="addrow"><button class="addEx">+ Add exercise</button></div>
+    <div class="clabel">Score</div>
+    <div class="chips c3st">${C3_SCORES.map(([k, l]) => `<button class="chip ${k === p.scoreType ? 'on' : ''}" data-st="${k}">${l}</button>`).join('')}</div>
+    <div class="c3score">${c3ScoreHTML(p)}</div>
+  </div>`;
+}
+function c3Field(p, f, t, card) {
+  if (f === 'name') { p.name = t.value; $('#sTitle').placeholder = autoTitle(draft); }
+  else if (f === 'text') { p.text = t.value; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+  else if (f === 'cap') { p.cap = t.value === '' ? '' : Math.max(0, parseInt(t.value) || 0); const ti = card.querySelector('.titlein'); if (ti) ti.placeholder = c3Label(p); }
+  else if (f === 'sc.min' || f === 'sc.sec') {
+    const m = parseFloat(card.querySelector('[data-f="sc.min"]').value) || 0, sec = parseFloat(card.querySelector('[data-f="sc.sec"]').value) || 0;
+    p.score.timeSec = m * 60 + sec || 0;
+  }
+  else if (f === 'sc.capped') { p.score.capped = t.checked; rerenderPart(+card.dataset.p); }
+  else if (f.startsWith('sc.')) p.score[f.slice(3)] = t.value === '' ? '' : (parseFloat(t.value) || 0);
+  stashDraft();
+}
+function c3Click(t, p, pi, card) {
+  const stp = t.closest('[data-stp]');
+  if (stp) { const inp = stp.parentElement.querySelector('input'); inp.value = Math.max(0, (parseInt(inp.value) || 0) + +stp.dataset.stp); c3Field(p, inp.dataset.f, inp, card); return true; }
+  const ty = t.closest('[data-t3]');
+  if (ty) { p.format = ty.dataset.t3; if (!p.stTouched) { p.scoreType = c3DefaultScore(p.format); p.score = {}; } rerenderPart(pi); stashDraft(); return true; }
+  const st = t.closest('[data-st]');
+  if (st) { p.scoreType = st.dataset.st; p.stTouched = true; p.score = {}; rerenderPart(pi); stashDraft(); return true; }
+  if (t.closest('.addEx')) { openPicker('cond', pi); return true; }
+  const row = t.closest('.cex[data-j]');
+  if (row && t.closest('.cw')) { c3Weight(pi, +row.dataset.j); return true; }
+  if (row && t.closest('.ctot')) { openTotal(pi, +row.dataset.j); return true; }
+  return false;
+}
+function c3Weight(pi, j, then) {
+  const x = draft.parts[pi].ex[j];
+  const w0 = x.w > 0 ? x.w : x.equip === 'barbell' && !x.wset ? (x.bar ?? 20) : 0;
+  openWeightFor(x, w0, x.name, v => { x.w = v; x.wset = true; x.sets = [{ r:x.total || 0, w:v }]; rerenderPart(pi); stashDraft(); if (then) then(); });
+}
+function c3Add(pi, item) {
+  const p = draft.parts[pi], us = unitsFor(item);
+  const x = { name:item.name, equip:item.equip, unit: us.includes(item.unit) ? item.unit : us[0], impl:1, w:0, total:0, sets:[{ r:0, w:0 }] };
+  p.ex.push(x); const j = p.ex.length - 1;
+  rerenderPart(pi); stashDraft();
+  const E = EQ[x.equip] || EQ.other;
+  if (!E.noWeight && !E.optional) c3Weight(pi, j, () => openTotal(pi, j)); else openTotal(pi, j);
+}
+
+// ---- total reps helper: Total | Per round × rounds | List ----
+let tsh = null;
+function openTotal(pi, j) {
+  const p = draft.parts[pi], x = p.ex[j], c = x.calc || {};
+  tsh = { pi, j, mode: c.mode || 'total', total: x.total || 0, per: c.per || 0, rounds: c.rounds || (p.score && p.score.rounds) || 0, list: c.list || '', unit: x.unit, target: 'per', fresh: true };
+  $('#tsTitle').textContent = `${x.name} · total`;
+  $('#tsheet').classList.add('on'); document.body.style.overflow = 'hidden';
+  renderTS();
+}
+function closeTS() { tsh = null; $('#tsheet').classList.remove('on'); document.body.style.overflow = ''; }
+const tsValue = () => tsh.mode === 'total' ? tsh.total : tsh.mode === 'pxr' ? r2(tsh.per * tsh.rounds) : sum(parseList(tsh.list));
+function renderTS() {
+  const x = draft.parts[tsh.pi].ex[tsh.j], us = unitsFor(x);
+  if (!us.includes(tsh.unit)) tsh.unit = us[0];
+  $$('#tsMode button').forEach(b => b.classList.toggle('on', b.dataset.tm === tsh.mode));
+  $('#tsUnits').innerHTML = us.length > 1 ? us.map(u => `<button class="chip ${tsh.unit === u ? 'on' : ''}" data-tu="${u}">${u}</button>`).join('') : '';
+  $('#tsUnits').classList.toggle('hidden', us.length < 2);
+  const u = tsh.unit === 'reps' ? 'reps' : tsh.unit;
+  let h = '';
+  if (tsh.mode === 'total') h = `<div class="repsrow"><button class="pm" data-td="-1">−</button><div class="repsval"><span class="csbig">${num(tsh.total)}</span><small>${u}</small></div><button class="pm" data-td="1">+</button></div>`;
+  else if (tsh.mode === 'pxr') h = `<div class="ladboxes"><button class="ladbox ${tsh.target === 'per' ? 'on' : ''}" data-tt="per"><small>Per round</small><b>${num(tsh.per)}</b></button><button class="ladbox ${tsh.target === 'rounds' ? 'on' : ''}" data-tt="rounds"><small>Rounds</small><b>${num(tsh.rounds)}</b></button></div>
+      <div class="ladpm"><button class="pm sm" data-td="-1">−</button><button class="pm sm" data-td="1">+</button></div><div class="tsum">= ${num(tsValue())} ${u}</div>`;
+  else h = `<div class="repsval" style="margin:12px 0 2px"><span class="tslist">${esc(tsh.list) || '<span class="cph">e.g. 4-6-8-10-12-14</span>'}</span></div><div class="tsum">= ${num(tsValue())} ${u}</div>`;
+  $('#tsBody').innerHTML = h;
+  $('#tsKeys').innerHTML = (tsh.mode === 'list' ? ['1','2','3','4','5','6','7','8','9','–','0','⌫'] : ['1','2','3','4','5','6','7','8','9','C','0','⌫']).map(k => `<button data-tk="${k}">${k}</button>`).join('');
+}
+TS_INIT.push(() => $('#tsheet').addEventListener('click', e => {
+  const t = e.target; if (!tsh) return;
+  if (t.id === 'tsheet' || t.closest('#tsClose')) return closeTS();
+  const m = t.closest('[data-tm]'); if (m) { tsh.mode = m.dataset.tm; tsh.fresh = true; renderTS(); return; }
+  const u = t.closest('[data-tu]'); if (u) { tsh.unit = u.dataset.tu; renderTS(); return; }
+  const tg = t.closest('[data-tt]'); if (tg) { tsh.target = tg.dataset.tt; tsh.fresh = true; renderTS(); return; }
+  const d = t.closest('[data-td]');
+  if (d) { const k = tsh.mode === 'total' ? 'total' : tsh.target; tsh[k] = Math.max(0, tsh[k] + +d.dataset.td); tsh.fresh = false; renderTS(); return; }
+  const kb = t.closest('[data-tk]');
+  if (kb) {
+    const k = kb.dataset.tk;
+    if (tsh.mode === 'list') {
+      if (k === '⌫') tsh.list = tsh.list.slice(0, -1);
+      else if (k === '–') { if (tsh.list && !tsh.list.endsWith('-')) tsh.list += '-'; }
+      else if (tsh.list.length < 60) tsh.list += k;
+    } else {
+      const key = tsh.mode === 'total' ? 'total' : tsh.target;
+      let v = tsh[key];
+      if (k === 'C') v = 0; else if (k === '⌫') v = Math.floor(v / 10); else v = tsh.fresh ? +k : Math.min(99999, v * 10 + +k);
+      tsh[key] = v;
+    }
+    tsh.fresh = false; renderTS(); return;
+  }
+  if (t.closest('#tsOk')) {
+    const { pi, j } = tsh, x = draft.parts[pi].ex[j], v = tsValue();
+    x.total = v; x.unit = tsh.unit; x.calc = { mode:tsh.mode, per:tsh.per, rounds:tsh.rounds, list:tsh.list.replace(/-+$/, '') };
+    x.sets = [{ r:v, w:x.w || 0 }];
+    closeTS(); rerenderPart(pi); stashDraft();
+  }
+}));
+
 function condHTML(p, i) {
+  if (!p.v3) toCond3(p);
+  return cond3HTML(p, i);
+}
+function condHTMLOld(p, i) {
   if (!COND_FORMATS.some(f => f[0] === p.format)) p.format = 'time';
   if (!p.score) p.score = {};
   return `<div class="card part cblock" data-p="${i}">
@@ -1014,7 +1233,7 @@ function openSession(s) {
 }
 async function closeSession(dir = 'right') {
   const d = draft;
-  const parts = d.parts.filter(p => p.kind === 'strength' || p.name || p.ex.length || scoreStr(p)).map(p => clone(p));
+  const parts = d.parts.filter(p => p.kind === 'strength' || p.name || p.ex.length || scoreStr(p) || (p.text || '').trim()).map(p => clone(p));
   const existing = sessions.find(s => s.id === d.id);
   const empty = !parts.length && !(d.name || '').trim() && !(d.notes || '').trim();
   const now = Date.now();
@@ -1077,6 +1296,7 @@ document.addEventListener('pointercancel', () => { if (swp && swp.active) swEnd(
 document.addEventListener('click', e => { if (swBlock && !e.target.closest('.sw-del')) { e.stopPropagation(); e.preventDefault(); swBlock = false; } }, true);
 
 function setPartField(p, f, t, card) {
+  if (p.v3) return c3Field(p, f, t, card);
   if (f === 'name') { p.name = t.value; $('#sTitle').placeholder = autoTitle(draft); }
   else if (f === 'same') { setSame(p, t.checked); rerenderPart(+card.dataset.p); }
   else if (f === 'lst' || f === 'lsp') {
@@ -1160,7 +1380,7 @@ logEl.addEventListener('click', async e => {
   if (t.closest('#closeBtn')) return closeSession('down');
   if (t.closest('#closeTop')) return closeSession('right');
   if (t.closest('#addStrength')) return openStrengthPicker();
-  if (t.closest('#addCond')) { draft.parts.push({ ...newPart(), format:'amrap', every:1, kind:'conditioning' }); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return; }
+  if (t.closest('#addCond')) { draft.parts.push(newCond3()); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return; }
   const card = t.closest('.part'); if (!card) return;
   const pi = +card.dataset.p, p = draft.parts[pi];
   if (t.closest('.rmPart')) {
@@ -1188,6 +1408,7 @@ logEl.addEventListener('click', async e => {
     if (t.closest('.addSet')) { x.sets.push({ r:0, w:null, done:false }); rerenderPart(pi); stashDraft(); return; }
     return;
   }
+  if (p.v3) { c3Click(t, p, pi, card); return; }
   const stp = t.closest('[data-stp]');
   if (stp) {
     const inp = stp.parentElement.querySelector('input');
@@ -1753,6 +1974,7 @@ function choose(item) {
     draft.parts.push(strengthPart(item.name, item.equip, item.unit || 'reps', [0, 1, 2].map(() => ({ r:0, w:null, done:false }))));
     closeEditor(); renderLog(); stashDraft(); scrollToPart(draft.parts.length - 1); return;
   }
+  if (ed.mode === 'cond' && draft.parts[ed.pi] && draft.parts[ed.pi].v3) { const pi = ed.pi; closeEditor(); c3Add(pi, item); return; }
   if (ed.mode === 'cond' && ed.round != null) {
     const pi = ed.pi, r = ed.round, p = draft.parts[pi];
     const us = unitsFor(item), e = { name:item.name, equip:item.equip, unit: us.includes(item.unit) ? item.unit : us[0], impl:1, sets:[{ r:0, w:0 }] };
@@ -2185,6 +2407,7 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => navigato
 
 
 // boot
+TS_INIT.forEach(f => f());
 draft = null;
 try { const raw = localStorage.getItem('wodlog.draft'); if (raw) { const o = JSON.parse(raw); if (o && o.draft && o.draft.parts) { draft = o.draft; draft.name = draft.name || ''; draft.parts = normParts(draft.parts); draft.id = draft.id || o.editingId || uid(); editingId = draft.id; logMode = 'session'; } } } catch (e) {}
 renderAll(); renderLog();
