@@ -542,7 +542,7 @@ h1,h2,h3{letter-spacing:0;font-weight:700}
 <div class="snack" id="snack"><span></span><button>Undo</button></div>
 
 <script>
-const APP_VERSION = 'v27';
+const APP_VERSION = 'v28';
 (() => {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -573,7 +573,7 @@ const LIB_RAW = {
   bodyweight:['Push-up','Burpee','Bar-facing Burpee','Burpee Box Jump Over','Box Jump','Box Jump Over','Air Squat','Walking Lunge','Jumping Lunge','Sit-up','GHD Sit-up','V-up','Single-under','Plank|sec'],
   cardio:['Row','Ski Erg','Bike Erg','Assault / Echo Bike','Run|m','Shuttle Run|m'],
   sandbag:['Sandbag Clean','Sandbag Over Shoulder','Sandbag to Shoulder','Sandbag Squat','Sandbag Lunge|m','Sandbag Carry|m','Sandbag Bear Hug Carry|m'],
-  other:['Sled Push|m','Sled Pull|m']
+  other:['Cable Fly','Sled Push|m','Sled Pull|m']
 };
 const LIB = [];
 for (const eq of EQ_ORDER) (LIB_RAW[eq] || []).forEach(s => { const [n, u] = s.split('|'); LIB.push({ name:n, equip:eq, unit: u || (eq === 'cardio' ? 'cal' : 'reps') }); });
